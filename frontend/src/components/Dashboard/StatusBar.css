@@ -1,0 +1,85 @@
+.status-bar {
+  display: flex;
+  justify-content: center; /* 居中容器 */
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-light);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.status-bar-inner {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 1200px;
+  padding: 12px 24px;
+  gap: 32px;
+  margin: 0 auto; /* 显式居中 */
+}
+
+.status-info {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 24px; /* 增加间距 */
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.status-item .label {
+  font-weight: 500;
+}
+
+.status-item .value {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.status-info {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dashboard-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #F3F4F6; /* 稍微加深主背景，让白色卡片更明显 */
+}
+
+.info-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background-color: var(--bg-body);
+  border-radius: 20px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.config-trigger {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-primary);
+  background-color: transparent;
+  border: 1px solid var(--brand-primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.config-trigger:hover {
+  background-color: var(--brand-primary);
+  color: white;
+}

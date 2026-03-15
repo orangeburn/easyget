@@ -1,0 +1,42 @@
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from app.core.state import state
+import logging
+
+logger = logging.getLogger(__name__)
+
+class TaskScheduler:
+    def __init__(self):
+        self.scheduler = AsyncIOScheduler()
+        self.job_id = "main_scan_job"
+
+    def start(self):
+        if not self.scheduler.running:
+            self.scheduler.start()
+            logger.info("Scheduler started.")
+
+    def shutdown(self):
+        if self.scheduler.running:
+            self.scheduler.shutdown()
+            logger.info("Scheduler shut down.")
+
+    def schedule_scan(self, minutes: int):
+        """配置或重新配置定时扫描周期"""
+        from app.services.task_service import task_service
+        
+        # 如果任务已存在，先移除
+        if self.scheduler.get_job(self.job_id):
+            self.scheduler.remove_job(self.job_id)
+            logger.info(f"Removed existing job: {self.job_id}")
+
+        # 添加新任务
+        self.scheduler.add_job(
+            task_service.run_one_off_scan,
+            trigger=IntervalTrigger(minutes=minutes),
+            id=self.job_id,
+            args=[True], # 标记为自动调度运行
+            replace_existing=True
+        )
+        logger.info(f"Scheduled scan job every {minutes} minutes.")
+
+scheduler_manager = TaskScheduler()
