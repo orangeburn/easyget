@@ -40,7 +40,8 @@ class GeneralSearchStrategy(BaseCollectorStrategy):
             "q": keyword,
             "gl": "cn",
             "hl": "zh-cn",
-            "autocorrect": True
+            "autocorrect": True,
+            "tbs": "qdr:m" # 强制过去一个月内，解决数据陈旧问题
         }
         headers = {
             'X-API-KEY': self.api_key,

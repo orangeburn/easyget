@@ -36,6 +36,7 @@ class BusinessConstraint(BaseModel):
     )
     scan_frequency: int = Field(default=30, description="采集频率（分钟）")
     custom_urls: List[str] = Field(default=[], description="用户自定义的监控站点列表")
+    wechat_accounts: List[str] = Field(default=[], description="微信公众号监控清单")
     updated_at: datetime = Field(default_factory=datetime.now)
 
     def to_json_dict(self) -> dict:

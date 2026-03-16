@@ -24,8 +24,12 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
             print(f"[BrowserSearch] 正在通过浏览器搜索: {keyword}")
             # 访问百度并搜索
             # rsv_spt=1 用于区分搜索，cl=3 用于网页搜索
-            url = f"https://www.baidu.com/s?wd={keyword}"
-            print(f"[BrowserSearch] 访问 URL: {url}")
+            # 添加 gpc=stf 时间过滤参数，限定过去 30 天，解决数据陈旧痛点
+            import time
+            now_ts = int(time.time())
+            past_ts = now_ts - 30 * 24 * 3600
+            url = f"https://www.baidu.com/s?wd={keyword}&gpc=stf={past_ts},{now_ts}|stftype=2"
+            print(f"[BrowserSearch] 访问 URL (带时间过滤): {url}")
             await page.goto(url, timeout=30000, wait_until="domcontentloaded")
             
             # 截图调试（可选，但在开发阶段由于看不到界面很有用）

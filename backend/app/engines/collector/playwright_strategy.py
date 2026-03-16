@@ -56,21 +56,25 @@ class SiteSpecificStrategy(BaseCollectorStrategy):
                 .map(a => ({href: a.getAttribute('href') || '', text: (a.innerText || '').trim()}))"""
         )
         base_host = urlparse(base_url).netloc
-        keywords = ["招标", "采购", "公告", "成交", "中标", "询价", "磋商"]
+        keywords = ["招标", "采购", "公告", "成交", "中标", "询价", "磋商", "意向", "项目", "结果", "答疑", "更正", "合同"]
         detail_links = []
         for a in anchors:
             href = a.get("href", "")
             text = a.get("text", "")
-            if not href:
-                continue
-            if href.startswith("javascript:"):
+            if not href or href.startswith("javascript:") or len(text) < 4:
                 continue
             abs_url = urljoin(base_url, href)
             host = urlparse(abs_url).netloc
             if host and host != base_host:
                 continue
-            blob = (href + " " + text)
-            if any(k in blob for k in keywords):
+            
+            # 放宽条件：链接文本足够长（像标题），或者命中更多业务相关的关键字
+            # 不再要求链接里必须带招标字眼，因为很多平台通过 ID 路由
+            blob = text
+            contains_kw = any(k in blob for k in keywords)
+            is_long_text = len(blob) >= 12 # 中文标题通常比较长，如果是导航或页码通常很短
+            
+            if contains_kw or is_long_text:
                 detail_links.append(abs_url)
         # Dedup while preserving order
         seen = set()

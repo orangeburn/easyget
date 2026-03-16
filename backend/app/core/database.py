@@ -25,6 +25,7 @@ class ConstraintModel(Base):
     other_constraints = Column(JSON)
     scan_frequency = Column(Integer, default=30) # Default 30 minutes
     custom_urls = Column(JSON, default=[])
+    wechat_accounts = Column(JSON, default=[])
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class ClueModel(Base):
@@ -63,6 +64,7 @@ def _ensure_column(table_name: str, column_name: str, column_def: str) -> None:
 
 _ensure_column("clues", "semantic_score", "semantic_score INTEGER")
 _ensure_column("clues", "markdown_text", "markdown_text TEXT")
+_ensure_column("constraints", "wechat_accounts", "wechat_accounts JSON")
 
 def get_db():
     db = SessionLocal()

@@ -25,7 +25,8 @@ class SystemState:
                     financial_thresholds=model.financial_thresholds,
                     other_constraints=model.other_constraints,
                     scan_frequency=model.scan_frequency,
-                    custom_urls=model.custom_urls or []
+                    custom_urls=model.custom_urls or [],
+                    wechat_accounts=model.wechat_accounts or []
                 )
             return None
         finally:
@@ -76,6 +77,7 @@ class SystemState:
             model.other_constraints = constraint.other_constraints
             model.scan_frequency = constraint.scan_frequency or 30
             model.custom_urls = constraint.custom_urls or []
+            model.wechat_accounts = constraint.wechat_accounts or []
             model.updated_at = datetime.utcnow()
             
             db.commit()

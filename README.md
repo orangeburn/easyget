@@ -1,87 +1,64 @@
-# Easyget
+# Easyget (极简版)
 
 ## 项目简介
-Easyget 是一个面向招标/采购信息的“Agentic Workflow + 结构化抓取”工具，包含：
-- HTML → Markdown Reader
-- 结构化抽取（Markdown 输入 + JSON 校验）
-- 规则评分 + 语义评分融合
-- 前端“判定墙”反馈闭环
+Easyget 是一个高性能、低干扰的招标/采购线索搜集与人工清洗工具。相比于复杂的 AI 端到端方案，本项目采用**“自动化搜集 + 规则初筛 + 人工最终决策”**的极简工作流，确保获取到的招标信息 100% 真实且时效性强。
+
+### 核心功能
+- **极简配置**：只需填入关键词或监控网址，无需训练复杂的业务画像。
+- **强制时效过滤**：内置搜索引擎时间锁，强制只获取近 30 天内的最新信息（qdr:m）。
+- **微信专项攻坚**：支持对微信公众号进行定向采集，解决微信内容闭环问题。
+- **高效判定墙**：直观的线索列表，支持 15 秒自动轮询，实时刷新最新获取的线索。
+- **配置持久化**：支持“重新配置”时的全量回填，配置体验顺滑。
 
 ---
 
 ## 目录结构
-- `backend/` FastAPI 后端
-- `frontend/` Vite + React 前端
-- `easyget.db` SQLite 数据库（本地生成）
+- `backend/` FastAPI 后端（核心爬虫引擎、SQLite 持久化）
+- `frontend/` Vite + React 前端（任务配置中心、数据判定墙）
+- `easyget.db` 本地 SQLite 数据库
 
 ---
 
-## 启动命令
+## 启动指南
 
-后端（`backend` 目录）：
+### 1. 准备工作 (环境变量)
+在 `backend/` 目录下创建 `.env` 文件，配置核心搜索能力：
 
+```env
+# 必须：用于 Google 搜索
+SEARCH_API_KEY=your_serper_api_key_here
+# 可选：如需使用特定代理或备用搜索引擎
+# PROXY_URL=...
+```
+
+### 2. 后端启动
 ```powershell
 cd backend
+# 安装依赖到本地目录 (如果未安装过)
+python -m pip install -r requirements.txt -t .deps
+# 设置 PYTHONPATH 并运行
 $env:PYTHONPATH="e:\Exercise\VibeCode\Easyget\backend\.deps"
 python run.py
 ```
 
-前端（`frontend` 目录）：
-
+### 3. 前端启动
 ```powershell
 cd frontend
+npm install
 npm run dev
 ```
 
-默认地址：
-- 后端 API：`http://127.0.0.1:8000/api`
-- 前端页面：`http://127.0.0.1:5173`
-
-判定墙入口：`/dashboard/wall`
-
 ---
 
-## 环境变量
-建议使用 `.env.local`，避免提交敏感信息：
-
-```
-OPENAI_API_KEY=sk-xxx
-OPENAI_BASE_URL=https://api.openai.com/v1
-MODEL_NAME=gpt-4-turbo-preview
-```
-
----
-
-## 依赖安装（后端）
-本项目后端依赖安装到 `backend/.deps`，启动时通过 `PYTHONPATH` 引用：
-
-```powershell
-python -m pip install -r backend\requirements.txt -t backend\.deps
-```
-
----
-
-## 测试
-后端：
-```powershell
-cd backend
-$env:PYTHONPATH="e:\Exercise\VibeCode\Easyget\backend\.deps"
-python -m pytest
-```
-
-前端构建：
-```powershell
-cd frontend
-npm run build
-```
+## 核心工作流
+1. **任务配置**：在首页填入关键词（如：`广州 智慧医疗 招标`）或定向网址。
+2. **自动化搜集**：系统分流至 Serper (Google)、百度及微信进行并发采集。
+3. **判定墙清洗**：数据流入 `/dashboard/wall`，用户进行“收藏”或“忽略”操作。
+4. **数据同步**：支持判定结果实时落库，供后续导出或集成。
 
 ---
 
 ## 常见问题
-1. 启动后端时报 `python-multipart` 缺失  
-   运行：
-   ```powershell
-   python -m pip install python-multipart==0.0.9 -t backend\.deps
-   ```
-2. Vite 报 `spawn EPERM`  
-   一般为 Windows 权限/环境限制导致的进程创建失败，建议以管理员权限运行终端或更换 Node 版本测试。
+- **数据加载不出来？** 请检查 `backend/.env` 是否配置了有效的 `SEARCH_API_KEY`。
+- **Windows 下 Vite 报错？** 建议检查 node 版本是否满足 Vite 4+ 要求，并清理 `node_modules` 重新安装。
+
