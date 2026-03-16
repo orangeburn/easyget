@@ -2,10 +2,10 @@
 
 ## 启动命令
 
-后端（backend 目录）：
+后端（backend 目录，推荐稳定启动）：
 
 ```powershell
-python -m uvicorn app.main:app --reload
+python run.py
 ```
 
 前端（frontend 目录）：

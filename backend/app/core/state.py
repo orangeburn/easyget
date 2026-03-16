@@ -46,9 +46,11 @@ class SystemState:
                     snippet=m.snippet,
                     publish_time=m.publish_time,
                     match_score=m.match_score,
+                    semantic_score=getattr(m, "semantic_score", None),
                     veto_reason=m.veto_reason,
                     extracted_metadata=m.extracted_metadata,
                     full_text=m.full_text,
+                    markdown_text=getattr(m, "markdown_text", None),
                     user_feedback=m.user_feedback,
                     is_archived=m.is_archived,
                     created_at=m.created_at
@@ -101,9 +103,11 @@ class SystemState:
                         snippet=clue.snippet,
                         publish_time=clue.publish_time,
                         match_score=clue.match_score,
+                        semantic_score=clue.semantic_score,
                         veto_reason=clue.veto_reason,
                         extracted_metadata=clue.extracted_metadata,
                         full_text=clue.full_text,
+                        markdown_text=clue.markdown_text,
                         user_feedback=clue.user_feedback,
                         is_archived=clue.is_archived,
                         fingerprint=f"{clue.title}_{clue.source}"

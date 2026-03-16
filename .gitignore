@@ -26,6 +26,19 @@ playwright/.cache/
 # Logs
 *.log
 
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Local backend deps/data
+backend/.deps/
+backend/data/
+
+# Local data
+*.db
+tests_report.txt
+
 # OS
 .DS_Store
 Thumbs.db

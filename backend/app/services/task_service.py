@@ -37,6 +37,12 @@ class TaskService:
                 else:
                     config = {}
 
+            if state.constraint is None:
+                debug_log("TaskService: Missing constraint; aborting run_one_off_scan")
+                state.current_progress = 0
+                state.current_step = "错误: 未配置企业画像"
+                return
+
             debug_log("TaskService: Calling Dispatcher.run_all_tasks")
             raw_clues = await self.dispatcher.run_all_tasks(state.constraint, config)
             state.current_progress = 50

@@ -4,6 +4,8 @@ from app.schemas.clue import ClueItem
 from app.schemas.constraint import BusinessConstraint
 from app.engines.analyzer.extractor import deep_extractor
 from app.engines.analyzer.evaluator import ClueEvaluator
+from app.engines.analyzer.feature_filter import StructuralFeatureScorer
+from app.services.reader_service import ReaderService
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 
@@ -13,6 +15,8 @@ class CluePipeline:
     """
     def __init__(self):
         self.evaluator = ClueEvaluator()
+        self.reader = ReaderService()
+        self.feature_scorer = StructuralFeatureScorer()
 
     async def _process_single_clue(self, clue: ClueItem, constraint: BusinessConstraint) -> ClueItem:
         """对单条线索进行深度处理：抓取原文 -> 结构化分析 -> 评分"""
@@ -25,20 +29,40 @@ class CluePipeline:
                     page = await browser.new_page()
                     await stealth_async(page)
                     await page.goto(clue.url, timeout=20000, wait_until="domcontentloaded")
-                    clue.full_text = await page.evaluate("() => document.body.innerText")
+                    html = await page.content()
+                    markdown = self.reader.to_markdown(html, clue.url)
+                    inner_text = await page.evaluate("() => document.body.innerText")
+                    if markdown and len(markdown) >= 50:
+                        clue.markdown_text = markdown
+                    if inner_text:
+                        clue.full_text = inner_text
+                    elif markdown:
+                        clue.full_text = markdown
                     await browser.close()
             except Exception as e:
                 print(f"[Pipeline] 抓取全文失败 {clue.url}: {e}")
 
-        # 2. 深度结构化提取
-        if clue.full_text:
-            deep_meta = await deep_extractor.extract(clue.full_text, constraint)
+        # 2. 结构特征初筛（降噪）
+        feature_score, feature_reason = self.feature_scorer.score(
+            title=clue.title or "",
+            snippet=clue.snippet or "",
+            full_text=clue.markdown_text or clue.full_text or ""
+        )
+        if feature_reason:
+            clue.match_score = 0
+            clue.veto_reason = f"{feature_reason}({feature_score})"
+            return clue
+
+        # 3. 深度结构化提取
+        text_for_llm = clue.markdown_text or clue.full_text
+        if text_for_llm:
+            deep_meta = await deep_extractor.extract(text_for_llm, constraint)
             if deep_meta:
                 if not clue.extracted_metadata:
                     clue.extracted_metadata = {}
                 clue.extracted_metadata.update(deep_meta)
         
-        # 3. 定制化打分
+        # 4. 定制化打分
         try:
             score, veto_reason = self.evaluator.evaluate(clue, constraint)
             clue.match_score = score
@@ -47,6 +71,12 @@ class CluePipeline:
             print(f"[Pipeline] 评分异常: {e}")
             clue.match_score = 0
             
+        # 5. 反馈闭环：动态阈值过滤
+        if clue.veto_reason is None and clue.match_score is not None:
+            threshold = self.evaluator.get_dynamic_threshold()
+            if threshold and clue.match_score < threshold:
+                clue.veto_reason = f"评分低于动态阈值({threshold})"
+
         return clue
 
     async def run(self, raw_clues: List[ClueItem], constraint: BusinessConstraint) -> List[ClueItem]:

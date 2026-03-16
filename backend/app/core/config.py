@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     # [Anti-Crawl Settings]
     WEB_PROXY_URL: Optional[str] = None
 
+    # [Reader]
+    READER_PROVIDER: str = "builtin"
+    READER_API_KEY: Optional[str] = None
+    READER_BASE_URL: Optional[str] = None
+
     class Config:
         env_file = [".env", ".env.local"]
         extra = "ignore"

@@ -43,3 +43,78 @@
   color: white;
   border-color: var(--text-primary);
 }
+
+.filter-btn.wall-entry {
+  border-color: rgba(170, 59, 255, 0.4);
+  color: var(--brand-primary);
+}
+
+.wall-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(120deg, rgba(170, 59, 255, 0.12), rgba(255, 255, 255, 0.7));
+  border: 1px solid rgba(170, 59, 255, 0.2);
+  border-radius: 18px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  gap: 20px;
+}
+
+.wall-banner-copy h3 {
+  margin: 8px 0 6px;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.wall-banner-copy p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.banner-kicker {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--text-tertiary);
+  font-weight: 700;
+}
+
+.wall-banner-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.banner-btn {
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.banner-btn.primary {
+  background: var(--text-primary);
+  color: #fff;
+}
+
+.banner-btn.primary:hover {
+  transform: translateY(-1px);
+}
+
+.banner-btn.ghost {
+  background: #ffffff;
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+@media (max-width: 960px) {
+  .wall-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

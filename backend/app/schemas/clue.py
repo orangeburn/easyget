@@ -15,8 +15,10 @@ class ClueItem(BaseModel):
     # 以下为后期 Analyzer 补充的内容
     extracted_metadata: Optional[dict] = Field(default=None, description="LLM结构化提取的元数据")
     match_score: Optional[int] = Field(default=None, description="匹配得分 (0-100)")
+    semantic_score: Optional[int] = Field(default=None, description="语义匹配得分 (0-100)")
     veto_reason: Optional[str] = Field(default=None, description="一票否决原因")
     full_text: Optional[str] = Field(default=None, description="抓取到的网页正文全文")
+    markdown_text: Optional[str] = Field(default=None, description="Reader 生成的 Markdown 文本")
     user_feedback: int = Field(default=0, description="用户反馈 (1: 准确, -1: 误报, 0: 未评价)")
     is_archived: bool = Field(default=False, description="是否已归档")
     

@@ -1,6 +1,9 @@
 from typing import Tuple, Optional
+import time
 from app.schemas.clue import ClueItem
 from app.schemas.constraint import BusinessConstraint
+from app.engines.analyzer.vector_store import HashingVectorizer, SimpleVectorStore
+import os
 
 class ClueEvaluator:
     """
@@ -9,10 +12,17 @@ class ClueEvaluator:
     def __init__(self):
         # 简单权重配置，实际业务可抽离至配置文件或数据库
         self.weights = {
-            "business_match": 40,
-            "qualification_match": 40,
-            "location_match": 20
+            "business_match": 30,
+            "qualification_match": 30,
+            "location_match": 20,
+            "semantic_match": 20
         }
+        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+        store_path = os.path.join(base_dir, "data", "vector_store.json")
+        self.vectorizer = HashingVectorizer(dim=256)
+        self.vector_store = SimpleVectorStore(dim=256, path=store_path)
+        self._feedback_cache_at = 0.0
+        self._feedback_cache = (0, 0)
 
     def evaluate(self, clue: ClueItem, constraint: BusinessConstraint) -> Tuple[int, Optional[str]]:
         """
@@ -68,5 +78,73 @@ class ClueEvaluator:
         else:
             # 没提地点，默认给分
             score += self.weights["location_match"]
-            
+
+        # 4. 语义相似度评分（轻量向量）
+        semantic_score = self._semantic_score(clue, constraint)
+        clue.semantic_score = semantic_score
+        score += int(self.weights["semantic_match"] * (semantic_score / 100.0))
+
         return (score, veto_reason)
+
+    def get_dynamic_threshold(self) -> int:
+        """根据用户反馈动态计算最低评分阈值（0 表示不启用）"""
+        pos, neg = self._get_feedback_counts()
+        return self._compute_dynamic_threshold(pos, neg)
+
+    @staticmethod
+    def _compute_dynamic_threshold(pos: int, neg: int) -> int:
+        total = pos + neg
+        if total < 5:
+            return 0
+        neg_ratio = neg / total if total else 0.0
+        threshold = int(round(40 + 40 * neg_ratio))
+        return max(40, min(80, threshold))
+
+    def _get_feedback_counts(self) -> Tuple[int, int]:
+        now = time.time()
+        if now - self._feedback_cache_at < 30:
+            return self._feedback_cache
+        try:
+            from app.core.database import SessionLocal, ClueModel
+            db = SessionLocal()
+            try:
+                pos = db.query(ClueModel).filter(ClueModel.user_feedback == 1).count()
+                neg = db.query(ClueModel).filter(ClueModel.user_feedback == -1).count()
+            finally:
+                db.close()
+        except Exception:
+            pos, neg = 0, 0
+        self._feedback_cache_at = now
+        self._feedback_cache = (pos, neg)
+        return pos, neg
+
+    def _semantic_score(self, clue: ClueItem, constraint: BusinessConstraint) -> int:
+        text_parts = [
+            clue.title or "",
+            clue.snippet or "",
+            getattr(clue, "markdown_text", "") or "",
+            clue.full_text or ""
+        ]
+        text = " ".join([t for t in text_parts if t]).strip()
+        if not text:
+            return 0
+
+        profile_parts = []
+        profile_parts.extend(constraint.core_business or [])
+        for q in constraint.qualifications:
+            profile_parts.append(f"{q.name} {q.value}")
+        for g in constraint.geography_limits:
+            profile_parts.append(f"{g.name} {g.value}")
+        profile_text = " ".join([p for p in profile_parts if p]).strip()
+        if not profile_text:
+            return 0
+
+        text_vec = self.vectorizer.vectorize(text)
+        profile_vec = self.vectorizer.vectorize(profile_text)
+
+        # Store profile vector for potential reuse/debug
+        self.vector_store.upsert("business_profile", profile_vec)
+
+        sim = sum(x * y for x, y in zip(text_vec, profile_vec))
+        sim = max(0.0, min(1.0, sim))
+        return int(round(sim * 100))
