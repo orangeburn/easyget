@@ -77,7 +77,7 @@ class SystemState:
             model.qualifications = [q.model_dump() if hasattr(q, 'model_dump') else q for q in constraint.qualifications]
             model.geography_limits = [q.model_dump() if hasattr(q, 'model_dump') else q for q in constraint.geography_limits]
             model.financial_thresholds = [q.model_dump() if hasattr(q, 'model_dump') else q for q in constraint.financial_thresholds]
-            model.other_constraints = constraint.other_constraints
+            model.other_constraints = [q.model_dump() if hasattr(q, 'model_dump') else q for q in constraint.other_constraints]
             model.scan_frequency = constraint.scan_frequency or 30
             model.custom_urls = constraint.custom_urls or []
             model.wechat_accounts = constraint.wechat_accounts or []

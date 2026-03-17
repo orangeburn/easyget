@@ -46,6 +46,11 @@ class CollectionDispatcher:
                 out.append(u)
         return out
 
+    def _is_blocked_url(self, url: str) -> bool:
+        url_l = (url or "").lower()
+        blocked_hosts = ["doc360.baidu.com"]
+        return any(h in url_l for h in blocked_hosts)
+
     async def run_all_tasks(self, constraint: BusinessConstraint, config: Dict[str, Any]) -> List[ClueItem]:
         """
         并行发起三个模式的抓取任务，收集并融合为一个 List 输出。
@@ -95,9 +100,9 @@ class CollectionDispatcher:
         except Exception:
             pass
         all_clues: List[ClueItem] = []
-        all_clues.extend(general_results)
-        all_clues.extend(site_results)
-        all_clues.extend(wechat_results)
+        all_clues.extend([c for c in general_results if not self._is_blocked_url(c.url)])
+        all_clues.extend([c for c in site_results if not self._is_blocked_url(c.url)])
+        all_clues.extend([c for c in wechat_results if not self._is_blocked_url(c.url)])
 
         print(f"[Dispatcher] 本次调度完成，共采集到 {len(all_clues)} 条线索。")
         return all_clues
@@ -120,7 +125,12 @@ class CollectionDispatcher:
         except Exception:
             pass
         print(f"[Dispatcher] 启动混合采集任务: 搜索词({len(search_keywords.split(',')) if search_keywords else 0}) | 监控站({len(target_urls)}) | 公众号({len(wechat_accounts)})")
-        general_results = await self.general_strategy.collect(constraint, search_keywords=search_keywords, on_clue=on_clue)
+        def safe_on_clue(clue):
+            if self._is_blocked_url(getattr(clue, "url", "")):
+                return
+            on_clue(clue)
+
+        general_results = await self.general_strategy.collect(constraint, search_keywords=search_keywords, on_clue=safe_on_clue)
         auto_portals = self._extract_portal_urls(general_results)
 
         merged_targets = list(target_urls) + auto_portals
@@ -134,8 +144,8 @@ class CollectionDispatcher:
         except Exception:
             pass
         site_results, wechat_results = await asyncio.gather(
-            self.site_strategy.collect(constraint, merged_targets, on_clue=on_clue),
-            self.wechat_strategy.collect(constraint, wechat_accounts, search_keywords=search_keywords, on_clue=on_clue)
+            self.site_strategy.collect(constraint, merged_targets, on_clue=safe_on_clue),
+            self.wechat_strategy.collect(constraint, wechat_accounts, search_keywords=search_keywords, on_clue=safe_on_clue)
         )
 
         try:
@@ -146,9 +156,9 @@ class CollectionDispatcher:
             pass
 
         all_clues: List[ClueItem] = []
-        all_clues.extend(general_results)
-        all_clues.extend(site_results)
-        all_clues.extend(wechat_results)
+        all_clues.extend([c for c in general_results if not self._is_blocked_url(c.url)])
+        all_clues.extend([c for c in site_results if not self._is_blocked_url(c.url)])
+        all_clues.extend([c for c in wechat_results if not self._is_blocked_url(c.url)])
 
         print(f"[Dispatcher] 本次调度完成，共采集到 {len(all_clues)} 条线索。")
         return all_clues

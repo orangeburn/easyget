@@ -89,6 +89,8 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
                         snippet = await abstract_el.inner_text()
                     
                     if title and href:
+                        if "doc360.baidu.com" in href:
+                            continue
                         # 尝试从摘要或时间标签提取日期
                         # 百度结果中常有 .c-showurl 包含日期，或摘要开头有日期
                         date_str = ""
@@ -147,6 +149,8 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
                     snippet = await snippet_el.inner_text() if await snippet_el.count() > 0 else ""
                     
                     if title and href:
+                        if "doc360.baidu.com" in href:
+                            continue
                         # 从摘要提取日期
                         pub_time = self._extract_date_from_snippet(snippet)
 
@@ -204,6 +208,8 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
                     snippet = await snippet_el.inner_text() if await snippet_el.count() > 0 else "查看正文详情"
                     
                     if title and href:
+                        if "doc360.baidu.com" in href:
+                            continue
                         # 提取日期
                         pub_time = self._extract_date_from_snippet(snippet)
 

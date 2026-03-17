@@ -65,9 +65,11 @@ class StructuralFeatureScorer:
                 pass
 
         # 3. 发布时间过滤
-        if constraint and constraint.other_constraints and publish_time:
+        if constraint and constraint.other_constraints:
             time_limit_item = next((c for c in constraint.other_constraints if c.name == "发布时间"), None)
             if time_limit_item:
+                if not publish_time:
+                    return 0, "缺少发布时间"
                 limit = time_limit_item.value # 3d, 1w, 1m
                 now = datetime.now()
                 if limit == "3d" and publish_time < now - timedelta(days=3):

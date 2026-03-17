@@ -49,7 +49,7 @@ export const StatusBar: React.FC = () => {
             })()}
           </span>
         </div>
-        <div className="status-item">
+        <div className="status-item task-status">
           <Activity size={16} />
           <span className="label">任务状态:</span>
           <span className="value">

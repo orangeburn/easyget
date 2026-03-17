@@ -51,6 +51,28 @@
   font-weight: 700;
 }
 
+.status-item.task-status {
+  max-width: 620px;
+}
+
+.status-item.task-status .value {
+  display: inline-block;
+  max-width: 520px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+@media (max-width: 900px) {
+  .status-item.task-status {
+    max-width: 440px;
+  }
+  .status-item.task-status .value {
+    max-width: 340px;
+  }
+}
+
 .status-info {
   margin-left: auto;
   display: flex;
