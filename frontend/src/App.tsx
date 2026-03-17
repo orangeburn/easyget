@@ -11,7 +11,7 @@ function App() {
   useEffect(() => {
     const checkState = async () => {
       try {
-        const state = await apiService.getSystemState();
+        const state = await apiService.getSystemState(6000);
         setHasConstraint(state.has_constraint);
       } catch (e) {
         console.error("Failed to check system state", e);
@@ -19,6 +19,10 @@ function App() {
       }
     };
     checkState();
+    const fallback = setTimeout(() => {
+      setHasConstraint(prev => (prev === null ? false : prev));
+    }, 8000);
+    return () => clearTimeout(fallback);
   }, []);
 
   if (hasConstraint === null) {

@@ -119,13 +119,7 @@ class ClueEvaluator:
         return pos, neg
 
     def _semantic_score(self, clue: ClueItem, constraint: BusinessConstraint) -> int:
-        text_parts = [
-            clue.title or "",
-            clue.snippet or "",
-            getattr(clue, "markdown_text", "") or "",
-            clue.full_text or ""
-        ]
-        text = " ".join([t for t in text_parts if t]).strip()
+        text = (clue.title or "").strip()
         if not text:
             return 0
 

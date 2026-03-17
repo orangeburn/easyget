@@ -1,7 +1,9 @@
 import httpx
+import asyncio
 import uuid
 import abc
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from app.schemas.clue import ClueItem
 from app.schemas.constraint import BusinessConstraint
@@ -9,22 +11,119 @@ from app.core.config import settings
 
 from app.engines.collector.base import BaseCollectorStrategy
 
-class GeneralSearchStrategy(BaseCollectorStrategy):
+def _extract_date_from_text(text: str) -> Optional[datetime]:
+    """Try to parse publish date from snippet text. Return None if unknown."""
+    if not text:
+        return None
+    if "天前" in text:
+        match = re.search(r'(\d+)天前', text)
+        if match:
+            return datetime.now() - timedelta(days=int(match.group(1)))
+    if "小时前" in text:
+        match = re.search(r'(\d+)小时前', text)
+        if match:
+            return datetime.now() - timedelta(hours=int(match.group(1)))
+
+    patterns = [
+        r'(\d{4}-\d{1,2}-\d{1,2})',
+        r'(\d{4}年\d{1,2}月\d{1,2}日)',
+        r'(\d{4}/\d{1,2}/\d{1,2})'
+    ]
+    for p in patterns:
+        match = re.search(p, text)
+        if match:
+            date_str = match.group(1)
+            date_str = date_str.replace('年', '-').replace('月', '-').replace('日', '').replace('/', '-')
+            try:
+                return datetime.strptime(date_str, "%Y-%m-%d")
+            except:
+                continue
+    return None
+
+class TavilySearchStrategy(BaseCollectorStrategy):
     """
-    全网搜索模式：集成 Serper.dev (Google Search API) 实现。
-    通过画像自动构建搜索指令，并解析返回的网页摘要。
+    Tavily AI 搜索模式：针对 AI Agent 优化的搜索引擎。
     """
     def __init__(self):
-        self.api_url = "https://google.serper.dev/search"
-        self.api_key = settings.SEARCH_API_KEY
+        self.api_url = "https://api.tavily.com/search"
+        self.api_key = settings.TAVILY_API_KEY
+
+    async def collect(self, constraint: BusinessConstraint, **kwargs) -> List[ClueItem]:
+        search_keywords_str = kwargs.get("search_keywords", "")
+        on_clue = kwargs.get("on_clue")
+        if not self.api_key or not search_keywords_str:
+            return []
+
+        keywords = [k.strip() for k in re.split(r'[,，、\s]+', search_keywords_str) if k.strip()][:3] # Tavily 成本较高，限制前3个词
+        
+        all_results = []
+        async with httpx.AsyncClient() as client:
+            for kw in keywords:
+                payload = {
+                    "api_key": self.api_key,
+                    "query": kw,
+                    "search_depth": "advanced",
+                    "include_answer": False,
+                    "include_images": False,
+                    "max_results": 10
+                }
+                try:
+                    print(f"[TavilySearch] 正在搜索: {kw}...")
+                    response = await client.post(self.api_url, json=payload, timeout=20.0)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    for item in data.get("results", []):
+                        clue = ClueItem(
+                            id=str(uuid.uuid4()),
+                            source="tavily",
+                            title=item.get("title", "无标题"),
+                            url=item.get("url", ""),
+                            snippet=item.get("content", ""),
+                            publish_time=_extract_date_from_text(item.get("content", ""))
+                        )
+                        all_results.append(clue)
+                        if on_clue:
+                            try:
+                                on_clue(clue)
+                            except Exception:
+                                pass
+                except Exception as e:
+                    print(f"[TavilySearch] 关键词 [{kw}] 采集失败: {e}")
+        
+        return all_results
+
+class GeneralSearchStrategy(BaseCollectorStrategy):
+    """
+    通用搜索模式：支持多引擎（Serper / Tavily / Browser）。
+    """
+    def __init__(self):
+        self.serper_api_url = "https://google.serper.dev/search"
+        self.serper_api_key = settings.SEARCH_API_KEY
+        self.tavily_strategy = TavilySearchStrategy()
+        self._on_clue = None
+
+    def _is_portal_like(self, title: str, url: str) -> bool:
+        """Heuristic: identify portal/home/list pages to avoid deep crawling."""
+        from urllib.parse import urlparse
+        url_l = (url or "").lower()
+        title_t = title or ""
+        portal_keywords = [
+            "招标网", "采购网", "公共资源交易", "政府采购", "交易中心", "平台", "网站", "中心", "门户", "首页", "频道"
+        ]
+        path = urlparse(url_l).path or "/"
+        url_hints = ["/index", "/home", "/portal", "/channel", "/list", "/tender", "/bidding", "/zfcg"]
+        if any(k in title_t for k in portal_keywords):
+            return True
+        if path == "/" or any(h in url_l for h in url_hints):
+            return True
+        return False
 
     def _build_query(self, constraint: BusinessConstraint) -> str:
         """根据画像构建高级搜索指令"""
         core = constraint.core_business[0] if constraint.core_business else ""
-        company = constraint.company_name
         
         # 典型的招标关键词组合
-        # site:*.gov.cn 过滤政府招标，site:*.edu.cn 过滤高校
         query = f'"{core}" 招标公告 (site:*.gov.cn OR site:*.com.cn)'
         
         if constraint.geography_limits:
@@ -33,80 +132,128 @@ class GeneralSearchStrategy(BaseCollectorStrategy):
             
         return query
 
-    async def _search_single_keyword(self, client: httpx.AsyncClient, keyword: str) -> List[ClueItem]:
-        """执行单个关键词的搜索"""
-        print(f"[GeneralSearch] 正在搜索: {keyword}...")
+    async def _search_serper(self, client: httpx.AsyncClient, keyword: str) -> List[ClueItem]:
+        """执行 Serper 搜索"""
+        print(f"[GeneralSearch-Serper] 正在搜索: {keyword}...")
         payload = {
             "q": keyword,
             "gl": "cn",
             "hl": "zh-cn",
             "autocorrect": True,
-            "tbs": "qdr:m" # 强制过去一个月内，解决数据陈旧问题
+            "tbs": "qdr:m"
         }
         headers = {
-            'X-API-KEY': self.api_key,
+            'X-API-KEY': self.serper_api_key,
             'Content-Type': 'application/json'
         }
 
         try:
-            response = await client.post(self.api_url, json=payload, headers=headers, timeout=15.0)
+            response = await client.post(self.serper_api_url, json=payload, headers=headers, timeout=15.0)
             response.raise_for_status()
             data = response.json()
             
             results = []
             organic = data.get("organic", [])
             for item in organic:
-                results.append(ClueItem(
+                snippet = item.get("snippet", "")
+                clue = ClueItem(
                     id=str(uuid.uuid4()),
-                    source="search",
+                    source="serper",
                     title=item.get("title", "无标题"),
                     url=item.get("link", ""),
-                    snippet=item.get("snippet", ""),
-                    publish_time=datetime.now()
-                ))
-            print(f"[GeneralSearch] 完成: {keyword} | 命中: {len(results)}")
+                    snippet=snippet,
+                    publish_time=_extract_date_from_text(snippet)
+                )
+                results.append(clue)
+                if self._on_clue:
+                    try:
+                        self._on_clue(clue)
+                    except Exception:
+                        pass
             return results
         except Exception as e:
-            print(f"[GeneralSearch] 关键词 [{keyword}] 采集失败: {e}")
+            print(f"[GeneralSearch-Serper] 失败: {e}")
             return []
 
     async def collect(self, constraint: BusinessConstraint, **kwargs) -> List[ClueItem]:
         search_keywords_str = kwargs.get("search_keywords", "")
-        
-        # 1. 解析关键词列表
-        keywords = []
-        if search_keywords_str:
-            # 支持逗号、中英文顿号、空格分隔
-            import re
-            keywords = [k.strip() for k in re.split(r'[,，、\s]+', search_keywords_str) if k.strip()]
-        
-        # 如果没有关键词，则使用默认的兜底 query
+        on_clue = kwargs.pop("on_clue", None)
+        self._on_clue = on_clue
+        import re
+        keywords = [k.strip() for k in re.split(r'[,，、\s]+', search_keywords_str) if k.strip()]
         if not keywords:
             keywords = [self._build_query(constraint)]
 
-        if not self.api_key or self.api_key == "your_search_api_key_here":
-            print("[GeneralSearch] 未检测到有效的 SEARCH_API_KEY，切换至 [浏览器搜索模式]...")
-            from app.engines.collector.browser_search_strategy import BrowserSearchStrategy
-            browser_strategy = BrowserSearchStrategy()
-            return await browser_strategy.collect(constraint, **kwargs)
+        # 构造并发搜索任务列表
+        search_tasks = []
 
-        print(f"[GeneralSearch] 开始并发采集，共 {len(keywords)} 个关键词")
+        # 1. Tavily (如果配置)
+        if settings.TAVILY_API_KEY:
+            search_tasks.append(self.tavily_strategy.collect(constraint, on_clue=on_clue, **kwargs))
+
+        # 2. Serper (如果配置)
+        if settings.SEARCH_API_KEY:
+            async def run_serper():
+                async with httpx.AsyncClient() as client:
+                    group_tasks = [self._search_serper(client, kw) for kw in keywords]
+                    results_groups = await asyncio.gather(*group_tasks)
+                    flat_results = []
+                    for group in results_groups:
+                        flat_results.extend(group)
+                    return flat_results
+            search_tasks.append(run_serper())
+
+        # 3. BrowserSearch (Baidu/Sogou/Bing) - 始终执行以确保搜狗覆盖
+        from app.engines.collector.browser_search_strategy import BrowserSearchStrategy
+        browser_strategy = BrowserSearchStrategy()
+        search_tasks.append(browser_strategy.collect(constraint, on_clue=on_clue, **kwargs))
+
+        print(f"[GeneralSearch] 启动全引擎并行采集 (Tavily={bool(settings.TAVILY_API_KEY)} | Serper={bool(settings.SEARCH_API_KEY)} | Browser=True)")
         
-        async with httpx.AsyncClient() as client:
-            tasks = [self._search_single_keyword(client, kw) for kw in keywords]
-            results_groups = await asyncio.gather(*tasks)
+        # 4. 执行并发
+        results_list = await asyncio.gather(*search_tasks)
+        
+        # 5. 汇总并根据 URL 去重
+        all_results: List[ClueItem] = []
+        seen_urls = set()
+        for res_group in results_list:
+            if not res_group: continue
+            for item in res_group:
+                if item.url not in seen_urls:
+                    all_results.append(item)
+                    seen_urls.add(item.url)
+
+        print(f"[GeneralSearch] 并行采集结束，去重后共 {len(all_results)} 条原始线索")
+
+        # 6. 后处理：深度补全 (针对 Top 5)
+        if all_results:
+            print(f"[GeneralSearch] 启动 Playwright 融合深度扫描 (Top 5)...")
+            from app.engines.collector.playwright_strategy import SiteSpecificStrategy
+            playwright_scraper = SiteSpecificStrategy()
             
-            # 2. 汇总并根据 URL 去重
-            all_results = []
-            seen_urls = set()
-            for group in results_groups:
-                for item in group:
-                    if item.url not in seen_urls:
-                        all_results.append(item)
-                        seen_urls.add(item.url)
-            
-            print(f"[GeneralSearch] 并发采集结束，去重后共 {len(all_results)} 条原始线索")
-            return all_results
+            # 只补全非微信链接，微信链接有专有逻辑处理
+            top_urls = []
+            for r in all_results:
+                if "mp.weixin.qq.com" in r.url:
+                    continue
+                if self._is_portal_like(r.title, r.url):
+                    print(f"[GeneralSearch] 跳过门户主页下钻: {r.url}")
+                    continue
+                top_urls.append(r.url)
+                if len(top_urls) >= 5:
+                    break
+            if top_urls:
+                deep_clues = await playwright_scraper.collect(constraint, target_urls=top_urls, on_clue=on_clue)
+                url_to_deep = {c.url: c for c in deep_clues}
+                for r in all_results:
+                    if r.url in url_to_deep:
+                        deep = url_to_deep[r.url]
+                        r.full_text = deep.full_text
+                        r.snippet = deep.snippet
+                        if deep.publish_time:
+                            r.publish_time = deep.publish_time
+        
+        return all_results
 
     def _mock_data(self, constraint: BusinessConstraint) -> List[ClueItem]:
         return [

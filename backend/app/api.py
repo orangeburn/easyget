@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from typing import Dict, Any, List
 from app.schemas.constraint import BusinessConstraint
 from app.schemas.clue import ClueItem
@@ -19,7 +19,11 @@ async def get_system_state():
         "company_name": state.constraint.company_name if state.constraint else None,
         "search_keywords": " ".join(state.constraint.core_business) if state.constraint and state.constraint.core_business else "",
         "target_urls": "\n".join(state.constraint.custom_urls) if state.constraint and state.constraint.custom_urls else "",
-        "wechat_accounts": "\n".join(state.constraint.wechat_accounts) if state.constraint and state.constraint.wechat_accounts else ""
+        "wechat_accounts": "\n".join(state.constraint.wechat_accounts) if state.constraint and state.constraint.wechat_accounts else "",
+        "geography_limits": state.constraint.geography_limits if state.constraint else [],
+        "financial_thresholds": state.constraint.financial_thresholds if state.constraint else [],
+        "other_constraints": state.constraint.other_constraints if state.constraint else [],
+        "scan_frequency": state.constraint.scan_frequency if state.constraint else 30
     }
 
 @router.post("/task/run")
@@ -58,6 +62,33 @@ async def get_clues():
     """获取已发现的线索列表"""
     return state.clues
 
+@router.get("/clues/stream")
+async def stream_clues(request: Request):
+    """SSE: 每处理一条线索就推送到前端"""
+    import asyncio
+    import json
+    from fastapi.responses import StreamingResponse
+
+    queue = state.subscribe_clues()
+
+    async def event_generator():
+        try:
+            # Initial ping so client knows stream is alive
+            yield "event: ready\ndata: {}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    item = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    # Keep-alive
+                    yield ": ping\n\n"
+        finally:
+            state.unsubscribe_clues(queue)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
 @router.post("/clues/{clue_id}/feedback")
 async def update_clue_feedback(clue_id: str, payload: Dict[str, Any]):
     """更新线索的用户反馈状态"""
@@ -77,7 +108,7 @@ async def export_clues_csv():
     
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["ID", "标题", "来源", "链接", "匹配分", "一票否决原因", "创建时间"])
+    writer.writerow(["ID", "标题", "来源", "链接", "一票否决原因", "创建时间"])
     
     for c in clues:
         writer.writerow([
@@ -85,7 +116,6 @@ async def export_clues_csv():
             c.title,
             c.source,
             c.url,
-            c.match_score,
             c.veto_reason or "",
             c.created_at
         ])

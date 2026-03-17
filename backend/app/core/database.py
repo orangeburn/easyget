@@ -37,7 +37,6 @@ class ClueModel(Base):
     url = Column(Text)
     snippet = Column(Text)
     publish_time = Column(DateTime, nullable=True)
-    match_score = Column(Integer, nullable=True)
     semantic_score = Column(Integer, nullable=True)
     veto_reason = Column(String, nullable=True)
     extracted_metadata = Column(JSON)

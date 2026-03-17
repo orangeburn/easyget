@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Heart, Ban, ExternalLink } from 'lucide-react';
 import { apiService } from '../services/api';
+import { normalizeClueUrl } from '../utils/url';
 import './DecisionWall.css';
 
 interface ClueMeta {
@@ -16,7 +17,6 @@ interface Clue {
   title: string;
   source: string;
   url: string;
-  match_score?: number;
   semantic_score?: number;
   veto_reason?: string;
   publish_time?: string;
@@ -42,9 +42,21 @@ export const DecisionWall: React.FC = () => {
 
   useEffect(() => {
     fetchClues();
-    // 简单搞个轮询，每隔15秒刷新一次列表，以便看到后台爬取的新数据
-    const interval = setInterval(fetchClues, 15000);
-    return () => clearInterval(interval);
+    const closeStream = apiService.streamClues((item: Clue) => {
+      setClues(prev => {
+        const idx = prev.findIndex(c => c.id === item.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = { ...next[idx], ...item };
+          return next;
+        }
+        return [item, ...prev];
+      });
+      setLoading(false);
+    });
+    return () => {
+      closeStream();
+    };
   }, []);
 
   const pendingClues = useMemo(
@@ -84,7 +96,7 @@ export const DecisionWall: React.FC = () => {
     <section className="decision-wall">
       <header className="wall-header">
         <div>
-          <h2 className="wall-title">数据清洗列表</h2>
+          <h2 className="wall-title">线索列表</h2>
           <p className="wall-subtitle">
             浏览自动搜集到的线索，快速标记您需要的项目。
           </p>
@@ -126,23 +138,23 @@ export const DecisionWall: React.FC = () => {
                     {clue.extracted_metadata?.summary || clue.extracted_metadata?.requirements || "内容摘要加载中/暂无内容"}
                   </p>
                   <div className="clue-item-footer">
-                    <a href={clue.url} target="_blank" rel="noreferrer" className="clue-link">
+                    <a href={normalizeClueUrl(clue.url, clue.source)} target="_blank" rel="noreferrer" className="clue-link">
                       <ExternalLink size={14} />
                       查看原文
                     </a>
                   </div>
                 </div>
                 <div className="clue-item-actions">
-                  <button 
-                    className="action-btn accept" 
+                  <button
+                    className="action-btn accept"
                     onClick={() => handleDecision(clue.id, 'right')}
                     title="收藏此线索"
                   >
                     <Heart size={18} />
                     收藏
                   </button>
-                  <button 
-                    className="action-btn reject" 
+                  <button
+                    className="action-btn reject"
                     onClick={() => handleDecision(clue.id, 'left')}
                     title="忽略此线索"
                   >

@@ -1,11 +1,18 @@
 const API_BASE_URL =
   (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
-type RequestOptions = RequestInit & { expectText?: boolean };
+type RequestOptions = RequestInit & { expectText?: boolean; timeoutMs?: number };
 
 async function request<T>(path: string, options?: RequestOptions): Promise<T> {
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, options);
+    const controller = new AbortController();
+    const timeoutMs = options?.timeoutMs ?? 10000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       const detail = errorData.detail || errorData.message;
@@ -90,8 +97,25 @@ export const apiService = {
     return request('/clues');
   },
 
-  async getSystemState() {
-    return request('/state');
+  streamClues(onMessage: (item: any) => void, onError?: (err: any) => void) {
+    const es = new EventSource(`${API_BASE_URL}/clues/stream`);
+    es.onmessage = (evt) => {
+      if (!evt.data) return;
+      try {
+        const item = JSON.parse(evt.data);
+        onMessage(item);
+      } catch {
+        // ignore parse errors
+      }
+    };
+    es.onerror = (err) => {
+      if (onError) onError(err);
+    };
+    return () => es.close();
+  },
+
+  async getSystemState(timeoutMs: number = 8000) {
+    return request('/state', { timeoutMs });
   },
 
   async updateClueFeedback(clueId: string, feedback: number) {

@@ -34,9 +34,24 @@ class TaskScheduler:
             task_service.run_one_off_scan,
             trigger=IntervalTrigger(minutes=minutes),
             id=self.job_id,
-            args=[True], # 标记为自动调度运行
+            kwargs={"is_scheduled": True}, # 标记为自动调度运行
             replace_existing=True
         )
         logger.info(f"Scheduled scan job every {minutes} minutes.")
+
+    def schedule_cleanup(self):
+        """每12小时清理一次过期线索"""
+        from app.services.task_service import task_service
+        job_id = "cleanup_job"
+        if self.scheduler.get_job(job_id):
+            self.scheduler.remove_job(job_id)
+        
+        self.scheduler.add_job(
+            task_service.cleanup_expired_clues,
+            trigger=IntervalTrigger(hours=12),
+            id=job_id,
+            replace_existing=True
+        )
+        logger.info("Scheduled cleanup job every 12 hours.")
 
 scheduler_manager = TaskScheduler()

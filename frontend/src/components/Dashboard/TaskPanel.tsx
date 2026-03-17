@@ -15,10 +15,6 @@ export const TaskPanel: React.FC = () => {
             <span className="stat-value">256</span>
           </div>
           <div className="stat-item">
-            <span className="stat-label">匹配线索</span>
-            <span className="stat-value">12</span>
-          </div>
-          <div className="stat-item">
             <span className="stat-label">上次更新</span>
             <span className="stat-value" style={{ fontSize: '14px' }}>10分钟前</span>
           </div>

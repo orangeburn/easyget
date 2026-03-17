@@ -14,7 +14,6 @@ class ClueItem(BaseModel):
     
     # 以下为后期 Analyzer 补充的内容
     extracted_metadata: Optional[dict] = Field(default=None, description="LLM结构化提取的元数据")
-    match_score: Optional[int] = Field(default=None, description="匹配得分 (0-100)")
     semantic_score: Optional[int] = Field(default=None, description="语义匹配得分 (0-100)")
     veto_reason: Optional[str] = Field(default=None, description="一票否决原因")
     full_text: Optional[str] = Field(default=None, description="抓取到的网页正文全文")

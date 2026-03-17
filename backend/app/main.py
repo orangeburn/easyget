@@ -31,6 +31,9 @@ async def lifespan(app: FastAPI):
     if constraint and constraint.scan_frequency:
         scheduler_manager.schedule_scan(constraint.scan_frequency)
     
+    # 启动过清理任务
+    scheduler_manager.schedule_cleanup()
+    
     yield
     # 关闭
     scheduler_manager.shutdown()

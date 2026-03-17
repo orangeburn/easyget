@@ -73,6 +73,30 @@
   gap: 8px;
   font-size: 14px;
   color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.header-actions-inline {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-copy-title-header {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  background-color: var(--brand-primary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(var(--brand-primary-rgb, 59, 130, 246), 0.3);
+}
+
+.btn-copy-title-header:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
 }
 
 .dot {
@@ -146,6 +170,45 @@
 .clue-link:hover {
   border-bottom-color: var(--brand-primary);
   opacity: 0.8;
+}
+
+.link-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.btn-copy-title {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  background-color: var(--brand-primary);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-copy-title:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.btn-copy-title:active {
+  transform: translateY(0);
+}
+
+.link-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--status-warning, #f59e0b);
+  margin-top: 4px;
 }
 
 .analysis-card {
@@ -295,20 +358,21 @@
 
 
 .full-text-container {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--bg-body);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-md);
-  padding: 16px;
-  max-height: 400px;
+  padding: 20px;
+  max-height: 500px;
   overflow-y: auto;
 }
 
-.full-text-container pre {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  font-size: 13px;
+.full-text-content p {
+  font-size: 14px;
+  line-height: 1.8;
   color: var(--text-secondary);
-  line-height: 1.6;
-  margin: 0;
-  font-family: inherit;
+  margin-bottom: 12px;
+}
+
+.full-text-content p:last-child {
+  margin-bottom: 0;
 }

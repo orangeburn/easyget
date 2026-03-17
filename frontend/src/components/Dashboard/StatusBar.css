@@ -1,85 +1,81 @@
 .status-bar {
   display: flex;
-  justify-content: center; /* 居中容器 */
-  background-color: var(--bg-surface);
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.72);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-bottom: 1px solid var(--border-light);
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: 1000;
 }
 
 .status-bar-inner {
   display: flex;
   align-items: center;
   width: 100%;
-  max-width: 1200px;
-  padding: 12px 24px;
-  gap: 32px;
-  margin: 0 auto; /* 显式居中 */
-}
-
-.status-info {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 24px; /* 增加间距 */
+  max-width: 1280px;
+  padding: 10px 32px;
+  gap: 40px;
 }
 
 .status-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: 10px;
+  font-size: 13px;
   color: var(--text-secondary);
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+
+.status-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: var(--border-light);
+}
+
+.status-item svg {
+  color: var(--text-tertiary);
 }
 
 .status-item .label {
   font-weight: 500;
+  opacity: 0.8;
 }
 
 .status-item .value {
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .status-info {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 16px;
-}
-
-.dashboard-root {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-  background-color: #F3F4F6; /* 稍微加深主背景，让白色卡片更明显 */
-}
-
-.info-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background-color: var(--bg-body);
-  border-radius: 20px;
-  font-size: 12px;
-  color: var(--text-tertiary);
 }
 
 .config-trigger {
-  padding: 6px 14px;
+  padding: 7px 18px;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--brand-primary);
-  background-color: transparent;
-  border: 1px solid var(--brand-primary);
-  border-radius: var(--radius-md);
+  font-weight: 700;
+  color: var(--text-primary);
+  background-color: white;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .config-trigger:hover {
-  background-color: var(--brand-primary);
-  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  border-color: var(--text-tertiary);
+}
+
+.config-trigger:active {
+  transform: scale(0.98);
 }

@@ -59,6 +59,12 @@ class CollectionDispatcher:
         search_keywords = config.get("search_keywords", "")
 
         # 1) 先执行全网搜索，自动识别门户/列表站点加入定向
+        try:
+            from app.core.state import state
+            state.current_progress = max(state.current_progress, 30)
+            state.current_step = "正在全网搜索..."
+        except Exception:
+            pass
         print(f"[Dispatcher] 启动混合采集任务: 搜索词({len(search_keywords.split(',')) if search_keywords else 0}) | 监控站({len(target_urls)}) | 公众号({len(wechat_accounts)})")
         general_results = await self.general_strategy.collect(constraint, search_keywords=search_keywords)
         auto_portals = self._extract_portal_urls(general_results)
@@ -70,12 +76,75 @@ class CollectionDispatcher:
         merged_targets = [u for u in merged_targets if not (u in seen or seen.add(u))]
 
         # 2) 站点与公众号并发
+        try:
+            from app.core.state import state
+            state.current_progress = max(state.current_progress, 50)
+            state.current_step = "正在抓取站点与公众号..."
+        except Exception:
+            pass
         site_results, wechat_results = await asyncio.gather(
             self.site_strategy.collect(constraint, merged_targets),
             self.wechat_strategy.collect(constraint, wechat_accounts, search_keywords=search_keywords)
         )
 
         # 3) 汇总
+        try:
+            from app.core.state import state
+            state.current_progress = max(state.current_progress, 60)
+            state.current_step = "采集结果整理中..."
+        except Exception:
+            pass
+        all_clues: List[ClueItem] = []
+        all_clues.extend(general_results)
+        all_clues.extend(site_results)
+        all_clues.extend(wechat_results)
+
+        print(f"[Dispatcher] 本次调度完成，共采集到 {len(all_clues)} 条线索。")
+        return all_clues
+
+    async def run_all_tasks_stream(self, constraint: BusinessConstraint, config: Dict[str, Any], on_clue) -> List[ClueItem]:
+        """
+        流式采集：每发现一条线索就回调 on_clue（用于即时 LLM 过滤）。
+        """
+        if constraint is None:
+            print("[Dispatcher] 缺少企业画像（constraint=None），本次采集已跳过。")
+            return []
+        target_urls = config.get("target_urls", [])
+        wechat_accounts = config.get("wechat_accounts", [])
+        search_keywords = config.get("search_keywords", "")
+
+        try:
+            from app.core.state import state
+            state.current_progress = max(state.current_progress, 30)
+            state.current_step = "正在全网搜索..."
+        except Exception:
+            pass
+        print(f"[Dispatcher] 启动混合采集任务: 搜索词({len(search_keywords.split(',')) if search_keywords else 0}) | 监控站({len(target_urls)}) | 公众号({len(wechat_accounts)})")
+        general_results = await self.general_strategy.collect(constraint, search_keywords=search_keywords, on_clue=on_clue)
+        auto_portals = self._extract_portal_urls(general_results)
+
+        merged_targets = list(target_urls) + auto_portals
+        seen = set()
+        merged_targets = [u for u in merged_targets if not (u in seen or seen.add(u))]
+
+        try:
+            from app.core.state import state
+            state.current_progress = max(state.current_progress, 50)
+            state.current_step = "正在抓取站点与公众号..."
+        except Exception:
+            pass
+        site_results, wechat_results = await asyncio.gather(
+            self.site_strategy.collect(constraint, merged_targets, on_clue=on_clue),
+            self.wechat_strategy.collect(constraint, wechat_accounts, search_keywords=search_keywords, on_clue=on_clue)
+        )
+
+        try:
+            from app.core.state import state
+            state.current_progress = max(state.current_progress, 60)
+            state.current_step = "采集结果整理中..."
+        except Exception:
+            pass
+
         all_clues: List[ClueItem] = []
         all_clues.extend(general_results)
         all_clues.extend(site_results)

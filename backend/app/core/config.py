@@ -9,6 +9,7 @@ class Settings(BaseSettings):
 
     # [Search API]
     SEARCH_API_KEY: Optional[str] = None
+    TAVILY_API_KEY: Optional[str] = None
     
     # [Anti-Crawl Settings]
     WEB_PROXY_URL: Optional[str] = None

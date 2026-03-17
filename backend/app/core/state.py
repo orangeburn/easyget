@@ -3,6 +3,9 @@ from app.schemas.constraint import BusinessConstraint
 from app.schemas.clue import ClueItem
 from app.core.database import SessionLocal, ConstraintModel, ClueModel
 from datetime import datetime
+from fastapi.encoders import jsonable_encoder
+import asyncio
+from typing import Set
 
 class SystemState:
     def __init__(self):
@@ -10,6 +13,7 @@ class SystemState:
         self.is_running: bool = False
         self.current_progress: int = 0
         self.current_step: str = "Ready"
+        self._clue_subscribers: Set[asyncio.Queue] = set()
 
     @property
     def constraint(self) -> Optional[BusinessConstraint]:
@@ -46,7 +50,6 @@ class SystemState:
                     url=m.url,
                     snippet=m.snippet,
                     publish_time=m.publish_time,
-                    match_score=m.match_score,
                     semantic_score=getattr(m, "semantic_score", None),
                     veto_reason=m.veto_reason,
                     extracted_metadata=m.extracted_metadata,
@@ -104,7 +107,6 @@ class SystemState:
                         url=clue.url,
                         snippet=clue.snippet,
                         publish_time=clue.publish_time,
-                        match_score=clue.match_score,
                         semantic_score=clue.semantic_score,
                         veto_reason=clue.veto_reason,
                         extracted_metadata=clue.extracted_metadata,
@@ -121,6 +123,26 @@ class SystemState:
             print(f"Error adding clues: {e}")
         finally:
             db.close()
+
+    def subscribe_clues(self) -> asyncio.Queue:
+        queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
+        self._clue_subscribers.add(queue)
+        return queue
+
+    def unsubscribe_clues(self, queue: asyncio.Queue) -> None:
+        if queue in self._clue_subscribers:
+            self._clue_subscribers.remove(queue)
+
+    def publish_clue(self, clue: ClueItem) -> None:
+        if not self._clue_subscribers:
+            return
+        payload = jsonable_encoder(clue)
+        for q in list(self._clue_subscribers):
+            try:
+                q.put_nowait(payload)
+            except asyncio.QueueFull:
+                # Drop if subscriber is too slow
+                continue
 
     def update_clue_status(self, clue_id: str, feedback: Optional[int] = None, archived: Optional[bool] = None):
         """更新线索的反馈状态或归档状态"""

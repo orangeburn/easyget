@@ -1,7 +1,9 @@
 import asyncio
 import uuid
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from typing import List
+import re
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 from app.schemas.clue import ClueItem
@@ -10,86 +12,226 @@ from app.engines.collector.base import BaseCollectorStrategy
 
 class BrowserSearchStrategy(BaseCollectorStrategy):
     """
-    浏览器搜素策略：利用 Playwright 模拟用户在搜索引擎（如百度）的行为进行抓取。
-    作为 API 缺失时的免费回退方案。
+    浏览器搜素策略：利用 Playwright 模拟用户在搜索引擎的行为进行抓取。
+    支持多引擎并发采集：百度、Bing、搜狗。
     """
+
+    def _extract_date_from_snippet(self, text: str):
+        """从搜索摘要或特定元素中提取日期"""
+        if not text:
+            return None
+
+        # 1. 处理相对时间 (例如: 1天前, 3小时前)
+        if "天前" in text:
+            match = re.search(r'(\d+)天前', text)
+            if match:
+                days = int(match.group(1))
+                        return datetime.now() - timedelta(days=days)
+        
+        if "小时前" in text:
+            match = re.search(r'(\d+)小时前', text)
+            if match:
+                hours = int(match.group(1))
+                        return datetime.now() - timedelta(hours=hours)
+
+        # 2. 处理绝对时间格式 (2024-03-10, 2024年3月10日)
+        patterns = [
+            r'(\d{4}-\d{1,2}-\d{1,2})',
+            r'(\d{4}年\d{1,2}月\d{1,2}日)',
+            r'(\d{4}/\d{1,2}/\d{1,2})'
+        ]
+        for p in patterns:
+            match = re.search(p, text)
+            if match:
+                date_str = match.group(1)
+                date_str = date_str.replace('年', '-').replace('月', '-').replace('日', '').replace('/', '-')
+                try:
+                    return datetime.strptime(date_str, "%Y-%m-%d")
+                except:
+                    continue
+
+        return None
     
     async def _search_baidu(self, context, keyword: str) -> List[ClueItem]:
-        """由于网页结构易变，此处需增加健壮性"""
         page = await context.new_page()
         await stealth_async(page)
-        
         results = []
         try:
-            print(f"[BrowserSearch] 正在通过浏览器搜索: {keyword}")
-            # 访问百度并搜索
-            # rsv_spt=1 用于区分搜索，cl=3 用于网页搜索
-            # 添加 gpc=stf 时间过滤参数，限定过去 30 天，解决数据陈旧痛点
-            import time
+            print(f"[BrowserSearch] 正在通过百度搜索: {keyword}")
             now_ts = int(time.time())
             past_ts = now_ts - 30 * 24 * 3600
+            # gpc=stf 时间过滤，限定过去 30 天
             url = f"https://www.baidu.com/s?wd={keyword}&gpc=stf={past_ts},{now_ts}|stftype=2"
-            print(f"[BrowserSearch] 访问 URL (带时间过滤): {url}")
             await page.goto(url, timeout=30000, wait_until="domcontentloaded")
-            
-            # 截图调试（可选，但在开发阶段由于看不到界面很有用）
-            # await page.screenshot(path=f"/tmp/search_{keyword}.png")
-            
-            # 等待搜索结果加载
-            print(f"[BrowserSearch] 等待结果容器加载...")
             try:
                 await page.wait_for_selector("#content_left", timeout=15000)
-            except Exception as e:
-                print(f"[BrowserSearch] 未能加载内容容器 #content_left: {e}")
-                # 尝试备用选择器或直接获取 body
+            except:
+                pass
                 
-            # 解析搜索条目 (百度典型的结果容器类名也可能是 t)
             items = await page.locator(".result.c-container").all()
-            print(f"[BrowserSearch] 找到匹配容器数量: {len(items)}")
-            
             if len(items) == 0:
-                # 尝试更宽泛的选择器
                 items = await page.locator("div.result").all()
-                print(f"[BrowserSearch] 尝试备用选择器后找到数量: {len(items)}")
             
-            for item in items[:8]: # 每次搜索取前 8 条
+            for item in items[:8]:
                 try:
                     title_el = item.locator("h3 a")
                     title = await title_el.inner_text()
                     href = await title_el.get_attribute("href")
+                    if href and href.startswith("/"):
+                        href = "https://www.baidu.com" + href
                     
-                    # 摘要信息通常在 content_left 或特定 div 中
                     abstract_el = item.locator(".c-abstract")
                     if await abstract_el.count() == 0:
-                        # 百度新版结构有些是用 content-right_xxxx
-                        abstract_el = item.locator(".content-right_8Zs9f") # 存根类名
+                        abstract_el = item.locator(".content-right_8Zs9f")
                     
                     snippet = ""
                     if await abstract_el.count() > 0:
                         snippet = await abstract_el.inner_text()
                     
                     if title and href:
-                        results.append(ClueItem(
+                        # 尝试从摘要或时间标签提取日期
+                        # 百度结果中常有 .c-showurl 包含日期，或摘要开头有日期
+                        date_str = ""
+                        # 尝试寻找百度特有的日期标记
+                        time_el = item.locator(".c-abstract .newTimeFactor_humanize, .c-abstract .c-showurl")
+                        if await time_el.count() > 0:
+                            date_str = await time_el.first.inner_text()
+                        
+                        pub_time = self._extract_date_from_snippet(date_str or snippet)
+
+                        clue = ClueItem(
                             id=str(uuid.uuid4()),
-                            source="browser_search",
+                            source="baidu",
                             title=title.strip(),
-                            url=href, # 注意：百度链接通常是加密跳转链接
+                            url=href,
                             snippet=snippet.strip() if snippet else "点击进入网页查看详情",
-                            publish_time=datetime.now()
-                        ))
-                except Exception as e:
+                            publish_time=pub_time
+                        )
+                        results.append(clue)
+                        if self._on_clue:
+                            try:
+                                self._on_clue(clue)
+                            except Exception:
+                                pass
+                except:
                     continue
-                    
-            print(f"[BrowserSearch] 关键词 [{keyword}] 采集完成，命中: {len(results)}")
+            print(f"[BrowserSearch] 百度完成: {keyword} | 命中: {len(results)}")
         except Exception as e:
-            print(f"[BrowserSearch] 关键词 [{keyword}] 搜索失败: {e}")
+            print(f"[BrowserSearch] 百度搜索失败: {e}")
         finally:
             await page.close()
+        return results
+
+    async def _search_bing(self, context, keyword: str) -> List[ClueItem]:
+        page = await context.new_page()
+        await stealth_async(page)
+        results = []
+        try:
+            print(f"[BrowserSearch] 正在通过 Bing 搜索: {keyword}")
+            url = f"https://cn.bing.com/search?q={keyword}"
+            await page.goto(url, timeout=30000, wait_until="domcontentloaded")
+            try:
+                await page.wait_for_selector("#b_results", timeout=15000)
+            except:
+                pass
             
+            items = await page.locator("li.b_algo").all()
+            for item in items[:8]:
+                try:
+                    title_el = item.locator("h2 a")
+                    title = await title_el.inner_text()
+                    href = await title_el.get_attribute("href")
+                    if href and href.startswith("/"):
+                        href = "https://cn.bing.com" + href
+                    snippet_el = item.locator(".b_caption p")
+                    snippet = await snippet_el.inner_text() if await snippet_el.count() > 0 else ""
+                    
+                    if title and href:
+                        # 从摘要提取日期
+                        pub_time = self._extract_date_from_snippet(snippet)
+
+                        clue = ClueItem(
+                            id=str(uuid.uuid4()),
+                            source="bing",
+                            title=title.strip(),
+                            url=href,
+                            snippet=snippet.strip() if snippet else "点击进入网页查看详情",
+                            publish_time=pub_time
+                        )
+                        results.append(clue)
+                        if self._on_clue:
+                            try:
+                                self._on_clue(clue)
+                            except Exception:
+                                pass
+                except: continue
+            print(f"[BrowserSearch] Bing 完成: {keyword} | 命中: {len(results)}")
+        except Exception as e:
+            print(f"[BrowserSearch] Bing 搜索失败: {e}")
+        finally:
+            await page.close()
+        return results
+
+    async def _search_sogou(self, context, keyword: str) -> List[ClueItem]:
+        page = await context.new_page()
+        await stealth_async(page)
+        results = []
+        try:
+            print(f"[BrowserSearch] 正在通过搜狗搜索: {keyword}")
+            url = f"https://www.sogou.com/web?query={keyword}"
+            await page.goto(url, timeout=30000, wait_until="domcontentloaded")
+            try:
+                await page.wait_for_selector(".results", timeout=15000)
+            except:
+                pass
+            
+            items = await page.locator(".vrwrap").all()
+            if not items:
+                items = await page.locator(".rb").all()
+                
+            for item in items[:8]:
+                try:
+                    title_el = item.locator("h3 a")
+                    title = await title_el.inner_text()
+                    href = await title_el.get_attribute("href")
+                    if href and href.startswith("/"):
+                        href = "https://www.sogou.com" + href
+                    
+                    snippet_el = item.locator(".res-desc")
+                    if await snippet_el.count() == 0:
+                        snippet_el = item.locator(".ft")
+                    
+                    snippet = await snippet_el.inner_text() if await snippet_el.count() > 0 else "查看正文详情"
+                    
+                    if title and href:
+                        # 提取日期
+                        pub_time = self._extract_date_from_snippet(snippet)
+
+                        clue = ClueItem(
+                            id=str(uuid.uuid4()),
+                            source="sogou",
+                            title=title.strip(),
+                            url=href,
+                            snippet=snippet.strip(),
+                            publish_time=pub_time
+                        )
+                        results.append(clue)
+                        if self._on_clue:
+                            try:
+                                self._on_clue(clue)
+                            except Exception:
+                                pass
+                except: continue
+            print(f"[BrowserSearch] 搜狗完成: {keyword} | 命中: {len(results)}")
+        except Exception as e:
+            print(f"[BrowserSearch] 搜狗搜索失败: {e}")
+        finally:
+            await page.close()
         return results
 
     async def collect(self, constraint: BusinessConstraint, **kwargs) -> List[ClueItem]:
         search_keywords_str = kwargs.get("search_keywords", "")
+        self._on_clue = kwargs.get("on_clue")
         if not search_keywords_str:
             return []
             
@@ -98,27 +240,31 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
         
         all_results = []
         async with async_playwright() as p:
-            # 百度对无头浏览器检测较严，需要配置 stealth 并模拟真实指纹
-            browser = await p.chromium.launch(
-                headless=True, 
-                args=["--no-sandbox", "--disable-setuid-sandbox"]
-            )
+            browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
             context = await browser.new_context(
                 viewport={'width': 1920, 'height': 1080},
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
             )
             
-            # 由于百度对并发敏感，我们稍微控制一下并发度，或者顺序执行核心词
-            # 为演示性能，这里依然采用并发，但在生产环境中建议加 delay
-            tasks = [self._search_baidu(context, kw) for kw in keywords]
-            results_groups = await asyncio.gather(*tasks)
-            
-            seen_urls = set()
-            for group in results_groups:
-                for item in group:
-                    if item.url not in seen_urls:
-                        all_results.append(item)
-                        seen_urls.add(item.url)
+            import random
+            for kw in keywords:
+                # 随机抖动：避免高频采集触发封禁
+                await asyncio.sleep(random.uniform(2.0, 5.0))
+                
+                # 并发执行三引擎
+                tasks = [
+                    self._search_baidu(context, kw),
+                    self._search_bing(context, kw),
+                    self._search_sogou(context, kw)
+                ]
+                results_groups = await asyncio.gather(*tasks)
+                
+                seen_urls = set()
+                for group in results_groups:
+                    for item in group:
+                        if item.url not in seen_urls:
+                            all_results.append(item)
+                            seen_urls.add(item.url)
             
             await context.close()
             await browser.close()
