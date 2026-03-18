@@ -4,6 +4,7 @@ import { StatusBar } from '../components/Dashboard/StatusBar';
 import { DecisionWall } from './DecisionWall';
 import { MainGrid } from '../components/Dashboard/MainGrid';
 import { SetupWizard } from './SetupWizard';
+import { SystemSettings } from './SystemSettings';
 import './Dashboard.css';
 
 export const Dashboard: React.FC = () => {
@@ -17,6 +18,7 @@ export const Dashboard: React.FC = () => {
           <Route path="wall" element={<div className="dashboard-main-content"><DecisionWall /></div>} />
           <Route path="persona" element={<div className="dashboard-main-content"><SetupWizard /></div>} />
           <Route path="settings" element={<div className="dashboard-main-content"><SetupWizard /></div>} />
+          <Route path="system-settings" element={<div className="dashboard-main-content"><SystemSettings /></div>} />
         </Routes>
       </main>
     </div>

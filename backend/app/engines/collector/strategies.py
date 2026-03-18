@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any
 from app.schemas.clue import ClueItem
 from app.schemas.constraint import BusinessConstraint
 from app.core.config import settings
+from app.utils.keywords import split_search_keywords
 
 from app.engines.collector.base import BaseCollectorStrategy
 
@@ -46,21 +47,27 @@ class TavilySearchStrategy(BaseCollectorStrategy):
     """
     def __init__(self):
         self.api_url = "https://api.tavily.com/search"
-        self.api_key = settings.TAVILY_API_KEY
 
     async def collect(self, constraint: BusinessConstraint, **kwargs) -> List[ClueItem]:
         search_keywords_str = kwargs.get("search_keywords", "")
         on_clue = kwargs.get("on_clue")
-        if not self.api_key or not search_keywords_str:
+        api_key = settings.TAVILY_API_KEY if settings.TAVILY_API_ENABLED else None
+        if not api_key or not search_keywords_str:
             return []
 
-        keywords = [k.strip() for k in re.split(r'[,，、\s]+', search_keywords_str) if k.strip()][:3] # Tavily 成本较高，限制前3个词
+        keywords = split_search_keywords(search_keywords_str)
         
         all_results = []
         async with httpx.AsyncClient() as client:
             for kw in keywords:
+                try:
+                    from app.core.state import state
+                    if state.is_paused:
+                        break
+                except Exception:
+                    pass
                 payload = {
-                    "api_key": self.api_key,
+                    "api_key": api_key,
                     "query": kw,
                     "search_depth": "advanced",
                     "include_answer": False,
@@ -88,6 +95,8 @@ class TavilySearchStrategy(BaseCollectorStrategy):
                                 on_clue(clue)
                             except Exception:
                                 pass
+                except asyncio.CancelledError:
+                    raise
                 except Exception as e:
                     print(f"[TavilySearch] 关键词 [{kw}] 采集失败: {e}")
         
@@ -99,7 +108,6 @@ class GeneralSearchStrategy(BaseCollectorStrategy):
     """
     def __init__(self):
         self.serper_api_url = "https://google.serper.dev/search"
-        self.serper_api_key = settings.SEARCH_API_KEY
         self.tavily_strategy = TavilySearchStrategy()
         self._on_clue = None
 
@@ -132,8 +140,14 @@ class GeneralSearchStrategy(BaseCollectorStrategy):
             
         return query
 
-    async def _search_serper(self, client: httpx.AsyncClient, keyword: str) -> List[ClueItem]:
+    async def _search_serper(self, client: httpx.AsyncClient, keyword: str, api_key: str) -> List[ClueItem]:
         """执行 Serper 搜索"""
+        try:
+            from app.core.state import state
+            if state.is_paused:
+                return []
+        except Exception:
+            pass
         print(f"[GeneralSearch-Serper] 正在搜索: {keyword}...")
         payload = {
             "q": keyword,
@@ -143,7 +157,7 @@ class GeneralSearchStrategy(BaseCollectorStrategy):
             "tbs": "qdr:m"
         }
         headers = {
-            'X-API-KEY': self.serper_api_key,
+            'X-API-KEY': api_key,
             'Content-Type': 'application/json'
         }
 
@@ -171,6 +185,8 @@ class GeneralSearchStrategy(BaseCollectorStrategy):
                     except Exception:
                         pass
             return results
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             print(f"[GeneralSearch-Serper] 失败: {e}")
             return []
@@ -179,8 +195,13 @@ class GeneralSearchStrategy(BaseCollectorStrategy):
         search_keywords_str = kwargs.get("search_keywords", "")
         on_clue = kwargs.pop("on_clue", None)
         self._on_clue = on_clue
-        import re
-        keywords = [k.strip() for k in re.split(r'[,，、\s]+', search_keywords_str) if k.strip()]
+        try:
+            from app.core.state import state
+            if state.is_paused:
+                return []
+        except Exception:
+            pass
+        keywords = split_search_keywords(search_keywords_str)
         if not keywords:
             keywords = [self._build_query(constraint)]
 
@@ -188,17 +209,22 @@ class GeneralSearchStrategy(BaseCollectorStrategy):
         search_tasks = []
 
         # 1. Tavily (如果配置)
-        if settings.TAVILY_API_KEY:
+        if settings.TAVILY_API_ENABLED and settings.TAVILY_API_KEY:
             search_tasks.append(self.tavily_strategy.collect(constraint, on_clue=on_clue, **kwargs))
 
         # 2. Serper (如果配置)
-        if settings.SEARCH_API_KEY:
+        if settings.SERPER_API_ENABLED and settings.SEARCH_API_KEY:
             async def run_serper():
+                api_key = settings.SEARCH_API_KEY
                 async with httpx.AsyncClient() as client:
-                    group_tasks = [self._search_serper(client, kw) for kw in keywords]
-                    results_groups = await asyncio.gather(*group_tasks)
+                    group_tasks = [self._search_serper(client, kw, api_key) for kw in keywords]
+                    results_groups = await asyncio.gather(*group_tasks, return_exceptions=True)
                     flat_results = []
                     for group in results_groups:
+                        # 过滤掉异常对象，只处理有效结果
+                        if isinstance(group, Exception):
+                            print(f"[GeneralSearch-Serper] 某个关键词搜索失败: {type(group).__name__}: {str(group)}")
+                            continue
                         flat_results.extend(group)
                     return flat_results
             search_tasks.append(run_serper())
@@ -208,22 +234,34 @@ class GeneralSearchStrategy(BaseCollectorStrategy):
         browser_strategy = BrowserSearchStrategy()
         search_tasks.append(browser_strategy.collect(constraint, on_clue=on_clue, **kwargs))
 
-        print(f"[GeneralSearch] 启动全引擎并行采集 (Tavily={bool(settings.TAVILY_API_KEY)} | Serper={bool(settings.SEARCH_API_KEY)} | Browser=True)")
+        print(f"[GeneralSearch] 启动全引擎并行采集 (Tavily={bool(settings.TAVILY_API_ENABLED and settings.TAVILY_API_KEY)} | Serper={bool(settings.SERPER_API_ENABLED and settings.SEARCH_API_KEY)} | Browser=True)")
         
-        # 4. 执行并发
-        results_list = await asyncio.gather(*search_tasks)
+        # 4. 执行并发 - 使用 return_exceptions=True 捕获异常，防止协程泄漏
+        results_list = await asyncio.gather(*search_tasks, return_exceptions=True)
         
-        # 5. 汇总并根据 URL 去重
+        # 5. 汇总并根据 URL 去重 - 过滤掉异常，只保留有效结果
         all_results: List[ClueItem] = []
         seen_urls = set()
         for res_group in results_list:
-            if not res_group: continue
+            # 过滤掉异常对象，只处理列表结果
+            if isinstance(res_group, Exception):
+                print(f"[GeneralSearch] 某个采集引擎失败: {type(res_group).__name__}: {str(res_group)}")
+                continue
+            if not res_group: 
+                continue
             for item in res_group:
                 if item.url not in seen_urls:
                     all_results.append(item)
                     seen_urls.add(item.url)
 
         print(f"[GeneralSearch] 并行采集结束，去重后共 {len(all_results)} 条原始线索")
+
+        try:
+            from app.core.state import state
+            if state.is_paused:
+                return all_results
+        except Exception:
+            pass
 
         # 6. 后处理：深度补全 (针对 Top 5)
         if all_results:

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { X, ExternalLink, AlertTriangle } from 'lucide-react';
 import { normalizeClueUrl } from '../../utils/url';
 import './ClueDetailDrawer.css';
@@ -6,12 +7,20 @@ interface ClueDetailProps {
   clue: any;
   isOpen: boolean;
   onClose: () => void;
+  onFeedback?: (clueId: string, feedback: number) => Promise<void> | void;
 }
 
-export const ClueDetailDrawer: React.FC<ClueDetailProps> = ({ clue, isOpen, onClose }) => {
+export const ClueDetailDrawer: React.FC<ClueDetailProps> = ({ clue, isOpen, onClose, onFeedback }) => {
   if (!clue) return null;
 
   const metadata = clue.extracted_metadata || {};
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsSubmitting(false);
+    }
+  }, [isOpen]);
 
   const handleCopyTitle = () => {
     if (!clue.title) return;
@@ -19,8 +28,23 @@ export const ClueDetailDrawer: React.FC<ClueDetailProps> = ({ clue, isOpen, onCl
     alert('标题已复制，请在微信中搜索');
   };
 
+  const handleFavorite = async () => {
+    if (!clue?.id || !onFeedback || isSubmitting || clue.user_feedback === 1) {
+      return;
+    }
+    try {
+      setIsSubmitting(true);
+      await onFeedback(clue.id, 1);
+    } catch {
+      // Error feedback is surfaced by the parent handler; keep the drawer open.
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <div className={`drawer-overlay ${isOpen ? 'open' : ''}`} onClick={onClose}>
+    <>
+      <div className={`drawer-overlay ${isOpen ? 'open' : ''}`} onClick={onClose} />
       <div className={`drawer-content ${isOpen ? 'open' : ''}`} onClick={e => e.stopPropagation()}>
         <header className="drawer-header">
           <button className="close-btn" onClick={onClose}><X size={20} /></button>
@@ -108,9 +132,15 @@ export const ClueDetailDrawer: React.FC<ClueDetailProps> = ({ clue, isOpen, onCl
           <a href={normalizeClueUrl(clue.url, clue.source) || '#'} target="_blank" rel="noreferrer" className="btn-link">
             查看原文 <ExternalLink size={16} />
           </a>
-          <button className="btn-primary">收藏此线索</button>
+          <button
+            className={`btn-primary ${clue.user_feedback === 1 ? 'is-active' : ''}`}
+            onClick={handleFavorite}
+            disabled={isSubmitting || clue.user_feedback === 1}
+          >
+            {clue.user_feedback === 1 ? '已收藏' : isSubmitting ? '收藏中...' : '收藏此线索'}
+          </button>
         </footer>
       </div>
-    </div>
+    </>
   );
 };

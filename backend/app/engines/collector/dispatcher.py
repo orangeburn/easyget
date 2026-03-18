@@ -6,6 +6,7 @@ from app.schemas.constraint import BusinessConstraint
 from app.engines.collector.strategies import GeneralSearchStrategy
 from app.engines.collector.playwright_strategy import SiteSpecificStrategy
 from app.engines.collector.wechat_strategy import WechatStrategy
+from app.utils.keywords import split_search_keywords
 
 class CollectionDispatcher:
     """
@@ -70,7 +71,7 @@ class CollectionDispatcher:
             state.current_step = "正在全网搜索..."
         except Exception:
             pass
-        print(f"[Dispatcher] 启动混合采集任务: 搜索词({len(search_keywords.split(',')) if search_keywords else 0}) | 监控站({len(target_urls)}) | 公众号({len(wechat_accounts)})")
+        print(f"[Dispatcher] 启动混合采集任务: 搜索词({len(split_search_keywords(search_keywords))}) | 监控站({len(target_urls)}) | 公众号({len(wechat_accounts)})")
         general_results = await self.general_strategy.collect(constraint, search_keywords=search_keywords)
         auto_portals = self._extract_portal_urls(general_results)
 
@@ -87,10 +88,18 @@ class CollectionDispatcher:
             state.current_step = "正在抓取站点与公众号..."
         except Exception:
             pass
-        site_results, wechat_results = await asyncio.gather(
+        results = await asyncio.gather(
             self.site_strategy.collect(constraint, merged_targets),
-            self.wechat_strategy.collect(constraint, wechat_accounts, search_keywords=search_keywords)
+            self.wechat_strategy.collect(constraint, wechat_accounts, search_keywords=search_keywords),
+            return_exceptions=True
         )
+        # 处理可能的异常
+        site_results = results[0] if not isinstance(results[0], Exception) else []
+        if isinstance(results[0], Exception):
+            print(f"[Dispatcher] 站点采集失败: {type(results[0]).__name__}: {str(results[0])}")
+        wechat_results = results[1] if not isinstance(results[1], Exception) else []
+        if isinstance(results[1], Exception):
+            print(f"[Dispatcher] 公众号采集失败: {type(results[1]).__name__}: {str(results[1])}")
 
         # 3) 汇总
         try:
@@ -124,7 +133,7 @@ class CollectionDispatcher:
             state.current_step = "正在全网搜索..."
         except Exception:
             pass
-        print(f"[Dispatcher] 启动混合采集任务: 搜索词({len(search_keywords.split(',')) if search_keywords else 0}) | 监控站({len(target_urls)}) | 公众号({len(wechat_accounts)})")
+        print(f"[Dispatcher] 启动混合采集任务: 搜索词({len(split_search_keywords(search_keywords))}) | 监控站({len(target_urls)}) | 公众号({len(wechat_accounts)})")
         def safe_on_clue(clue):
             if self._is_blocked_url(getattr(clue, "url", "")):
                 return
@@ -143,10 +152,18 @@ class CollectionDispatcher:
             state.current_step = "正在抓取站点与公众号..."
         except Exception:
             pass
-        site_results, wechat_results = await asyncio.gather(
+        results = await asyncio.gather(
             self.site_strategy.collect(constraint, merged_targets, on_clue=safe_on_clue),
-            self.wechat_strategy.collect(constraint, wechat_accounts, search_keywords=search_keywords, on_clue=safe_on_clue)
+            self.wechat_strategy.collect(constraint, wechat_accounts, search_keywords=search_keywords, on_clue=safe_on_clue),
+            return_exceptions=True
         )
+        # 处理可能的异常
+        site_results = results[0] if not isinstance(results[0], Exception) else []
+        if isinstance(results[0], Exception):
+            print(f"[Dispatcher] 站点采集失败: {type(results[0]).__name__}: {str(results[0])}")
+        wechat_results = results[1] if not isinstance(results[1], Exception) else []
+        if isinstance(results[1], Exception):
+            print(f"[Dispatcher] 公众号采集失败: {type(results[1]).__name__}: {str(results[1])}")
 
         try:
             from app.core.state import state

@@ -93,6 +93,13 @@ export const apiService = {
     });
   },
 
+  async stopTask() {
+    return request('/task/stop', {
+      method: 'POST',
+      timeoutMs: 30000
+    });
+  },
+
   async getClues() {
     return request('/clues');
   },
@@ -118,6 +125,26 @@ export const apiService = {
     return request('/state', { timeoutMs });
   },
 
+  async getSystemSettings() {
+    return request('/settings');
+  },
+
+  async updateSystemSettings(settings: any) {
+    return request('/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings)
+    });
+  },
+
+  async testSystemSettings(settings: any) {
+    return request('/settings/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings)
+    });
+  },
+
   async updateClueFeedback(clueId: string, feedback: number) {
     return request(`/clues/${clueId}/feedback`, {
       method: 'POST',
@@ -128,5 +155,26 @@ export const apiService = {
 
   async exportClues() {
     window.open(`${API_BASE_URL}/clues/export`, '_blank');
+  },
+  async exportCluesSelected(ids: string[]) {
+    const response = await fetch(`${API_BASE_URL}/clues/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids })
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const detail = errorData.detail || errorData.message;
+      throw new Error(detail || `请求失败 (${response.status})`);
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'easyget_clues_selected.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
   }
 };

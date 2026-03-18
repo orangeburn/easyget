@@ -1,10 +1,13 @@
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, Request, HTTPException
+import asyncio
 from typing import Dict, Any, List
 from app.schemas.constraint import BusinessConstraint
 from app.schemas.clue import ClueItem
 from app.core.state import state
 from app.services.task_service import task_service
 from app.utils.logger import debug_log
+from app.core.system_settings import load_system_settings, update_system_settings, test_system_settings
+from app.schemas.system_settings import SystemSettingsPayload, SystemSettingsResponse, SystemSettingsTestResponse
 
 router = APIRouter()
 
@@ -14,6 +17,7 @@ async def get_system_state():
     return {
         "has_constraint": state.constraint is not None,
         "is_running": state.is_running,
+        "is_paused": state.is_paused,
         "current_progress": state.current_progress,
         "current_step": state.current_step,
         "company_name": state.constraint.company_name if state.constraint else None,
@@ -23,11 +27,12 @@ async def get_system_state():
         "geography_limits": state.constraint.geography_limits if state.constraint else [],
         "financial_thresholds": state.constraint.financial_thresholds if state.constraint else [],
         "other_constraints": state.constraint.other_constraints if state.constraint else [],
-        "scan_frequency": state.constraint.scan_frequency if state.constraint else 30
+        "scan_frequency": state.constraint.scan_frequency if state.constraint else 30,
+        "expanded_keywords": state.last_expanded_keywords
     }
 
 @router.post("/task/run")
-async def run_collection_and_analysis(payload: Dict[str, Any], background_tasks: BackgroundTasks):
+async def run_collection_and_analysis(payload: Dict[str, Any]):
     """
     执行：启动信息采集并用极简 Pipeline 过滤
     Payload 结构: { "constraint": ..., "strategy": ... }
@@ -49,13 +54,39 @@ async def run_collection_and_analysis(payload: Dict[str, Any], background_tasks:
     
     # 立即标记状态，防止前端轮询到“空闲”
     state.is_running = True
+    state.is_paused = False
     state.current_progress = 5
     state.current_step = "正在启动抓取任务..."
 
     debug_log(f"Dispatching task context keywords: {strategy.get('search_keywords', 'N/A')}")
-    background_tasks.add_task(task_service.run_one_off_scan, strategy)
+    asyncio.create_task(task_service.run_one_off_scan(strategy))
     
     return {"status": "Task dispatched", "is_running": True}
+
+@router.post("/task/stop")
+async def stop_collection():
+    """用户暂停任务"""
+    task_service.request_stop()
+    state.is_paused = True
+    state.is_running = False
+    state.current_progress = 0
+    state.current_step = "已暂停"
+    return {"status": "Task stopped", "is_running": False}
+
+@router.get("/settings", response_model=SystemSettingsResponse)
+async def get_system_settings():
+    """获取系统设置（模型/搜索 API 配置）"""
+    return load_system_settings()
+
+@router.post("/settings", response_model=SystemSettingsResponse)
+async def save_system_settings(payload: SystemSettingsPayload):
+    """保存系统设置并立即生效"""
+    return update_system_settings(payload.model_dump())
+
+@router.post("/settings/test", response_model=SystemSettingsTestResponse)
+async def test_settings(payload: SystemSettingsPayload):
+    """测试系统设置连接是否可用（不写入数据库）"""
+    return await test_system_settings(payload.model_dump())
 
 @router.get("/clues", response_model=List[ClueItem])
 async def get_clues():
@@ -125,4 +156,56 @@ async def export_clues_csv():
         io.BytesIO(output.getvalue().encode("utf-8-sig")),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=easyget_clues.csv"}
+    )
+
+@router.post("/clues/export")
+async def export_selected_clues_csv(payload: Dict[str, Any]):
+    """将选中的线索导出为 CSV 格式"""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+    from app.core.database import SessionLocal, ClueModel
+
+    ids = payload.get("ids") or []
+    if not isinstance(ids, list) or not ids:
+        raise HTTPException(status_code=400, detail="未提供任何线索")
+
+    # 去重并保持顺序
+    ordered_ids = []
+    seen = set()
+    for cid in ids:
+        if cid in seen:
+            continue
+        seen.add(cid)
+        ordered_ids.append(cid)
+
+    db = SessionLocal()
+    try:
+        models = db.query(ClueModel).filter(ClueModel.id.in_(ordered_ids)).all()
+        model_map = {m.id: m for m in models}
+    finally:
+        db.close()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "标题", "来源", "链接", "一票否决原因", "创建时间"])
+
+    for cid in ordered_ids:
+        m = model_map.get(cid)
+        if not m:
+            continue
+        writer.writerow([
+            m.id,
+            m.title,
+            m.source,
+            m.url,
+            m.veto_reason or "",
+            m.created_at
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8-sig")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=easyget_clues_selected.csv"}
     )

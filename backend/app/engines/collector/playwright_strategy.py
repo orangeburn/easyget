@@ -158,7 +158,14 @@ class SiteSpecificStrategy(BaseCollectorStrategy):
             
             total_sites = len(urls_list)
             for idx, url in enumerate(urls_list, start=1):
+                page = None
                 try:
+                    try:
+                        from app.core.state import state
+                        if state.is_paused:
+                            break
+                    except Exception:
+                        pass
                     try:
                         from app.core.state import state
                         state.current_step = f"正在处理站点 ({idx}/{total_sites}): {url}"
@@ -176,6 +183,12 @@ class SiteSpecificStrategy(BaseCollectorStrategy):
                     if self._is_list_like_url(url):
                         list_pages = await self._extract_list_pages(page, url, max_pages=5)
                         for lp in list_pages:
+                            try:
+                                from app.core.state import state
+                                if state.is_paused:
+                                    break
+                            except Exception:
+                                pass
                             if lp != url:
                                 await page.goto(lp, timeout=30000, wait_until="domcontentloaded")
                                 await asyncio.sleep(1)
@@ -183,6 +196,12 @@ class SiteSpecificStrategy(BaseCollectorStrategy):
                             import random
                             # 每页全抓
                             for detail_url in detail_links:
+                                try:
+                                    from app.core.state import state
+                                    if state.is_paused:
+                                        break
+                                except Exception:
+                                    pass
                                 try:
                                     # 随机抖动：避免高频采集
                                     await asyncio.sleep(random.uniform(1.0, 3.0))
@@ -214,6 +233,8 @@ class SiteSpecificStrategy(BaseCollectorStrategy):
                                             on_clue(clue)
                                         except Exception:
                                             pass
+                                except asyncio.CancelledError:
+                                    raise
                                 except Exception as e:
                                     print(f"[SiteSpecific] 抓取详情失败: {detail_url} | {str(e)}")
                                 finally:
@@ -242,11 +263,12 @@ class SiteSpecificStrategy(BaseCollectorStrategy):
                                 on_clue(clue)
                             except Exception:
                                 pass
-                    
+                except asyncio.CancelledError:
+                    raise
                 except Exception as e:
                     print(f"[SiteSpecific] 抓取 {url} 失败: {str(e)}")
                 finally:
-                    if not page.is_closed():
+                    if page and not page.is_closed():
                         await page.close()
                         
             await context.close()

@@ -6,10 +6,10 @@ from app.schemas.constraint import BusinessConstraint
 from app.engines.collector.base import BaseCollectorStrategy
 from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
+from app.utils.keywords import split_search_keywords
 import uuid
 from datetime import datetime
 import random
-import re
 
 class WechatStrategy(BaseCollectorStrategy):
     """
@@ -27,8 +27,7 @@ class WechatStrategy(BaseCollectorStrategy):
         
         # 如果没有具体公众号，或者为了扩大覆盖面，也搜索关键词
         if search_keywords_str:
-            import re
-            kws = [k.strip() for k in re.split(r'[,，、\s]+', search_keywords_str) if k.strip()]
+            kws = split_search_keywords(search_keywords_str)
             # 限制关键词数量以免触发验证码
             targets.extend([{"type": "keyword", "val": k} for k in kws[:3]])
 
@@ -63,7 +62,14 @@ class WechatStrategy(BaseCollectorStrategy):
             )
             
             for target in targets:
+                page = None
                 try:
+                    try:
+                        from app.core.state import state
+                        if state.is_paused:
+                            break
+                    except Exception:
+                        pass
                     page = await context.new_page()
                     await stealth_async(page)
                     
@@ -87,6 +93,12 @@ class WechatStrategy(BaseCollectorStrategy):
                     
                     # 取出前 5 篇
                     for article in articles[:5]:
+                        try:
+                            from app.core.state import state
+                            if state.is_paused:
+                                break
+                        except Exception:
+                            pass
                         title_el = article.locator("h3 a")
                         if await title_el.count() == 0:
                             continue
@@ -161,15 +173,19 @@ class WechatStrategy(BaseCollectorStrategy):
                                     on_clue(clue)
                                 except Exception:
                                     pass
+                        except asyncio.CancelledError:
+                            raise
                         except Exception as e:
                             print(f"[Wechat] 提取正文失败: {e}")
                         finally:
                             await article_page.close()
                     
+                except asyncio.CancelledError:
+                    raise
                 except Exception as e:
                     print(f"[Wechat] 抓取微信内容失败: {str(e)}")
                 finally:
-                    if not page.is_closed():
+                    if page and not page.is_closed():
                         await page.close()
                         
             await context.close()

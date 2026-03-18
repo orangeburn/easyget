@@ -68,7 +68,7 @@ export const DecisionWall: React.FC = () => {
     [clues]
   );
   const ignoredCount = useMemo(
-    () => clues.filter(c => (c.user_feedback ?? 0) === -1).length,
+    () => clues.filter(c => (c.user_feedback ?? 0) === 2 || (c.user_feedback ?? 0) === -1).length,
     [clues]
   );
 
@@ -76,11 +76,11 @@ export const DecisionWall: React.FC = () => {
     // 乐观更新 UI
     setClues(prev =>
       prev.map(c =>
-        c.id === id ? { ...c, user_feedback: dir === 'right' ? 1 : -1 } : c
+        c.id === id ? { ...c, user_feedback: dir === 'right' ? 1 : 2 } : c
       )
     );
     try {
-      await apiService.updateClueFeedback(id, dir === 'right' ? 1 : -1);
+      await apiService.updateClueFeedback(id, dir === 'right' ? 1 : 2);
     } catch (error) {
       console.error('Failed to update feedback:', error);
       // 改回原状态

@@ -11,8 +11,10 @@ from app.api import router
 import time
 from contextlib import asynccontextmanager
 from app.core.scheduler import scheduler_manager
+from app.services.task_service import task_service
 from app.core.state import state
 from app.utils.logger import debug_log
+from app.core.system_settings import load_system_settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,6 +25,8 @@ async def lifespan(app: FastAPI):
         debug_log(f"AsyncIO policy: {asyncio.get_event_loop_policy().__class__.__name__}")
     except Exception as e:
         debug_log(f"AsyncIO loop/policy check failed: {e}")
+    # 加载系统设置（模型/搜索 API 等）
+    load_system_settings()
     # 启动调度器
     scheduler_manager.start()
     
@@ -36,6 +40,10 @@ async def lifespan(app: FastAPI):
     
     yield
     # 关闭
+    try:
+        task_service.request_stop()
+    except Exception:
+        pass
     scheduler_manager.shutdown()
     debug_log("--- Server Lifespan Shutdown ---")
 

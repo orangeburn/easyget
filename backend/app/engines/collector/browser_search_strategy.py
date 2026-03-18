@@ -9,6 +9,7 @@ from playwright_stealth import stealth_async
 from app.schemas.clue import ClueItem
 from app.schemas.constraint import BusinessConstraint
 from app.engines.collector.base import BaseCollectorStrategy
+from app.utils.keywords import split_search_keywords
 
 class BrowserSearchStrategy(BaseCollectorStrategy):
     """
@@ -26,13 +27,13 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
             match = re.search(r'(\d+)天前', text)
             if match:
                 days = int(match.group(1))
-                        return datetime.now() - timedelta(days=days)
+                return datetime.now() - timedelta(days=days)
         
         if "小时前" in text:
             match = re.search(r'(\d+)小时前', text)
             if match:
                 hours = int(match.group(1))
-                        return datetime.now() - timedelta(hours=hours)
+                return datetime.now() - timedelta(hours=hours)
 
         # 2. 处理绝对时间格式 (2024-03-10, 2024年3月10日)
         patterns = [
@@ -53,6 +54,12 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
         return None
     
     async def _search_baidu(self, context, keyword: str) -> List[ClueItem]:
+        try:
+            from app.core.state import state
+            if state.is_paused:
+                return []
+        except Exception:
+            pass
         page = await context.new_page()
         await stealth_async(page)
         results = []
@@ -118,6 +125,8 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
                 except:
                     continue
             print(f"[BrowserSearch] 百度完成: {keyword} | 命中: {len(results)}")
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             print(f"[BrowserSearch] 百度搜索失败: {e}")
         finally:
@@ -125,6 +134,12 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
         return results
 
     async def _search_bing(self, context, keyword: str) -> List[ClueItem]:
+        try:
+            from app.core.state import state
+            if state.is_paused:
+                return []
+        except Exception:
+            pass
         page = await context.new_page()
         await stealth_async(page)
         results = []
@@ -170,6 +185,8 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
                                 pass
                 except: continue
             print(f"[BrowserSearch] Bing 完成: {keyword} | 命中: {len(results)}")
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             print(f"[BrowserSearch] Bing 搜索失败: {e}")
         finally:
@@ -177,6 +194,12 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
         return results
 
     async def _search_sogou(self, context, keyword: str) -> List[ClueItem]:
+        try:
+            from app.core.state import state
+            if state.is_paused:
+                return []
+        except Exception:
+            pass
         page = await context.new_page()
         await stealth_async(page)
         results = []
@@ -229,6 +252,8 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
                                 pass
                 except: continue
             print(f"[BrowserSearch] 搜狗完成: {keyword} | 命中: {len(results)}")
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             print(f"[BrowserSearch] 搜狗搜索失败: {e}")
         finally:
@@ -240,9 +265,8 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
         self._on_clue = kwargs.get("on_clue")
         if not search_keywords_str:
             return []
-            
-        import re
-        keywords = [k.strip() for k in re.split(r'[,，、\s]+', search_keywords_str) if k.strip()]
+
+        keywords = split_search_keywords(search_keywords_str)
         
         all_results = []
         async with async_playwright() as p:
@@ -253,26 +277,43 @@ class BrowserSearchStrategy(BaseCollectorStrategy):
             )
             
             import random
-            for kw in keywords:
-                # 随机抖动：避免高频采集触发封禁
-                await asyncio.sleep(random.uniform(2.0, 5.0))
-                
-                # 并发执行三引擎
-                tasks = [
-                    self._search_baidu(context, kw),
-                    self._search_bing(context, kw),
-                    self._search_sogou(context, kw)
-                ]
-                results_groups = await asyncio.gather(*tasks)
-                
-                seen_urls = set()
-                for group in results_groups:
-                    for item in group:
-                        if item.url not in seen_urls:
-                            all_results.append(item)
-                            seen_urls.add(item.url)
-            
-            await context.close()
-            await browser.close()
+            try:
+                for kw in keywords:
+                    try:
+                        from app.core.state import state
+                        if state.is_paused:
+                            break
+                    except Exception:
+                        pass
+                    # 随机抖动：避免高频采集触发封禁
+                    await asyncio.sleep(random.uniform(2.0, 5.0))
+                    try:
+                        from app.core.state import state
+                        if state.is_paused:
+                            break
+                    except Exception:
+                        pass
+                    
+                    # 并发执行三引擎
+                    tasks = [
+                        self._search_baidu(context, kw),
+                        self._search_bing(context, kw),
+                        self._search_sogou(context, kw)
+                    ]
+                    results_groups = await asyncio.gather(*tasks, return_exceptions=True)
+                    
+                    seen_urls = set()
+                    for group in results_groups:
+                        # 过滤掉异常对象，只处理有效结果
+                        if isinstance(group, Exception):
+                            print(f"[BrowserSearch] 某引擎失败: {type(group).__name__}: {str(group)}")
+                            continue
+                        for item in group:
+                            if item.url not in seen_urls:
+                                all_results.append(item)
+                                seen_urls.add(item.url)
+            finally:
+                await context.close()
+                await browser.close()
             
         return all_results

@@ -11,9 +11,11 @@ class SystemState:
     def __init__(self):
         # 内存中仅保留轻量级状态
         self.is_running: bool = False
+        self.is_paused: bool = False
         self.current_progress: int = 0
         self.current_step: str = "Ready"
         self._clue_subscribers: Set[asyncio.Queue] = set()
+        self.last_expanded_keywords: List[str] = []
 
     @property
     def constraint(self) -> Optional[BusinessConstraint]:
@@ -78,7 +80,7 @@ class SystemState:
             model.geography_limits = [q.model_dump() if hasattr(q, 'model_dump') else q for q in constraint.geography_limits]
             model.financial_thresholds = [q.model_dump() if hasattr(q, 'model_dump') else q for q in constraint.financial_thresholds]
             model.other_constraints = [q.model_dump() if hasattr(q, 'model_dump') else q for q in constraint.other_constraints]
-            model.scan_frequency = constraint.scan_frequency or 30
+            model.scan_frequency = constraint.scan_frequency if constraint.scan_frequency is not None else 30
             model.custom_urls = constraint.custom_urls or []
             model.wechat_accounts = constraint.wechat_accounts or []
             model.updated_at = datetime.utcnow()

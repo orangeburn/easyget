@@ -5,26 +5,42 @@ from app.core.config import settings
 
 class LLMService:
     def __init__(self):
-        self.api_key = settings.OPENAI_API_KEY
-        self.base_url = settings.OPENAI_BASE_URL
-        self.model_name = settings.MODEL_NAME
-        self.client = OpenAI(api_key=self.api_key, base_url=self.base_url, timeout=30.0)
+        self._client = None
+        self._client_key = None
+        self._client_base_url = None
 
     def _get_common_params(self, temperature: float = 0.7) -> Dict[str, Any]:
         """获取通用请求参数，自动适配 MiniMax 特性"""
         params = {
-            "model": self.model_name,
+            "model": settings.MODEL_NAME,
             "temperature": temperature,
         }
         # 仅当 Base URL 包含 minimax 时才启用特有参数，确保对 OpenAI/DeepSeek 的兼容性
-        if self.base_url and "minimax" in self.base_url.lower():
+        if settings.OPENAI_BASE_URL and "minimax" in settings.OPENAI_BASE_URL.lower():
             params["extra_body"] = {"reasoning_split": True}
         return params
 
+    def _ensure_client(self) -> OpenAI:
+        if not settings.MODEL_API_ENABLED:
+            raise RuntimeError("模型 API 未启用，请在系统设置中开启")
+        if not settings.OPENAI_API_KEY:
+            raise RuntimeError("模型 API Key 未配置，请在系统设置中填写")
+
+        api_key = settings.OPENAI_API_KEY
+        base_url = settings.OPENAI_BASE_URL
+        if (self._client is None 
+            or api_key != self._client_key 
+            or base_url != self._client_base_url):
+            self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=30.0)
+            self._client_key = api_key
+            self._client_base_url = base_url
+        return self._client
+
     def generate_chat_response(self, system_prompt: str, messages: List[Dict[str, str]]) -> str:
         """基础对话请求"""
+        client = self._ensure_client()
         formatted_messages = [{"role": "system", "content": system_prompt}] + messages
-        response = self.client.chat.completions.create(
+        response = client.chat.completions.create(
             messages=formatted_messages,
             **self._get_common_params(temperature=0.7)
         )
@@ -33,11 +49,12 @@ class LLMService:
     def extract_structured_data(self, system_prompt: str, user_input: str, response_format: Any) -> Any:
         """提取结构化数据（并清理可能的思考块或 Markdown 标记）"""
         import re
+        client = self._ensure_client()
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_input}
         ]
-        response = self.client.chat.completions.create(
+        response = client.chat.completions.create(
             messages=messages,
             response_format={"type": "json_object"},
             **self._get_common_params(temperature=0.1)

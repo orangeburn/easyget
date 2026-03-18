@@ -49,6 +49,20 @@ class ClueModel(Base):
     # 记录原始指纹用于去重
     fingerprint = Column(String, index=True)
 
+class SystemSettingsModel(Base):
+    __tablename__ = "system_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    model_api_enabled = Column(Boolean, default=False)
+    model_api_key = Column(Text, nullable=True)
+    model_base_url = Column(Text, nullable=True)
+    model_name = Column(Text, nullable=True)
+    serper_api_enabled = Column(Boolean, default=False)
+    serper_api_key = Column(Text, nullable=True)
+    tavily_api_enabled = Column(Boolean, default=False)
+    tavily_api_key = Column(Text, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 # 自动创建表
 Base.metadata.create_all(bind=engine)
 
@@ -64,6 +78,14 @@ def _ensure_column(table_name: str, column_name: str, column_def: str) -> None:
 _ensure_column("clues", "semantic_score", "semantic_score INTEGER")
 _ensure_column("clues", "markdown_text", "markdown_text TEXT")
 _ensure_column("constraints", "wechat_accounts", "wechat_accounts JSON")
+_ensure_column("system_settings", "model_api_enabled", "model_api_enabled BOOLEAN DEFAULT 0")
+_ensure_column("system_settings", "model_api_key", "model_api_key TEXT")
+_ensure_column("system_settings", "model_base_url", "model_base_url TEXT")
+_ensure_column("system_settings", "model_name", "model_name TEXT")
+_ensure_column("system_settings", "serper_api_enabled", "serper_api_enabled BOOLEAN DEFAULT 0")
+_ensure_column("system_settings", "serper_api_key", "serper_api_key TEXT")
+_ensure_column("system_settings", "tavily_api_enabled", "tavily_api_enabled BOOLEAN DEFAULT 0")
+_ensure_column("system_settings", "tavily_api_key", "tavily_api_key TEXT")
 
 def get_db():
     db = SessionLocal()

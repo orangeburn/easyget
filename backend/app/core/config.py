@@ -3,12 +3,15 @@ from typing import Optional
 
 class Settings(BaseSettings):
     # [LLM Services]
-    OPENAI_API_KEY: str = "sk-..."
+    MODEL_API_ENABLED: bool = False
+    OPENAI_API_KEY: Optional[str] = None
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     MODEL_NAME: str = "gpt-4-turbo-preview"
 
     # [Search API]
+    SERPER_API_ENABLED: bool = False
     SEARCH_API_KEY: Optional[str] = None
+    TAVILY_API_ENABLED: bool = False
     TAVILY_API_KEY: Optional[str] = None
     
     # [Anti-Crawl Settings]

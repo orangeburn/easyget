@@ -58,6 +58,7 @@ export const SetupWizard: React.FC = () => {
     time_range: 'all',
     scan_frequency: 30
   });
+  const [expandedKeywords, setExpandedKeywords] = useState<string[]>([]);
 
   const provinces = Object.keys(REGION_DATA);
 
@@ -80,6 +81,7 @@ export const SetupWizard: React.FC = () => {
             scan_frequency: data.scan_frequency || 30
           });
         }
+        setExpandedKeywords(Array.isArray((data as any).expanded_keywords) ? (data as any).expanded_keywords : []);
       } catch (err) {
         console.warn('Failed to fetch previous state', err);
       } finally {
@@ -88,6 +90,20 @@ export const SetupWizard: React.FC = () => {
     };
     fetchPrevConfig();
   }, []);
+
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const data = await apiService.getSystemState(6000) as any;
+        const list = Array.isArray(data?.expanded_keywords) ? data.expanded_keywords : [];
+        setExpandedKeywords(list);
+      } catch {
+        // ignore polling errors
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
 
   const handleSubmit = async () => {
     if (!strategy.search_keywords.trim() && !strategy.target_urls.trim() && !strategy.wechat_accounts.trim()) {
@@ -164,7 +180,12 @@ export const SetupWizard: React.FC = () => {
     <div className={`setup-container ${isInDashboard ? 'in-dashboard' : ''}`}>
       <div className="setup-card step-fade-in">
         <header className="setup-header">
-          <h1 className="content-title">{isInDashboard ? (isDone ? '准备就绪' : '修改采集任务') : (isDone ? '准备就绪' : '配置采集任务')}</h1>
+          <div className="wizard-header-row">
+            <h1 className="content-title">{isInDashboard ? (isDone ? '准备就绪' : '修改采集任务') : (isDone ? '准备就绪' : '配置采集任务')}</h1>
+            <button className="back-trigger" onClick={() => navigate('/dashboard/clues')}>
+              返回
+            </button>
+          </div>
           <p className="content-desc">
             {isDone ? '爬虫任务已在后台启动。正在跳转至线索列表...' : '输入关键词或监控网址，Easyget 将自动为您汇集全网最新招标情报。'}
           </p>
@@ -191,6 +212,20 @@ export const SetupWizard: React.FC = () => {
                   value={strategy.search_keywords}
                   onChange={e => setStrategy({ ...strategy, search_keywords: e.target.value })}
                 />
+                <div className="expand-block">
+                  <div className="form-label">LLM扩词（只读）</div>
+                  <div className="expand-preview">
+                    <div className="expand-tags">
+                      {expandedKeywords.length > 0 ? (
+                        expandedKeywords.map((kw) => (
+                          <span className="expand-tag" key={kw}>{kw}</span>
+                        ))
+                      ) : (
+                        <span className="expand-hint">暂无扩词结果</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="filter-grid">
@@ -255,8 +290,7 @@ export const SetupWizard: React.FC = () => {
                     value={strategy.scan_frequency}
                     onChange={e => setStrategy({ ...strategy, scan_frequency: Number(e.target.value) })}
                   >
-                    <option value={30}>每半小时</option>
-                    <option value={60}>每一小时</option>
+                    <option value={0}>自动循环</option>
                     <option value={1440}>每一天</option>
                   </select>
                 </div>

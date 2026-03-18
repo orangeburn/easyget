@@ -16,6 +16,11 @@ class TaskScheduler:
             logger.info("Scheduler started.")
 
     def shutdown(self):
+        try:
+            from app.services.task_service import task_service
+            task_service.stop_auto_loop()
+        except Exception:
+            pass
         if self.scheduler.running:
             self.scheduler.shutdown()
             logger.info("Scheduler shut down.")
@@ -28,6 +33,15 @@ class TaskScheduler:
         if self.scheduler.get_job(self.job_id):
             self.scheduler.remove_job(self.job_id)
             logger.info(f"Removed existing job: {self.job_id}")
+
+        # 自动循环模式（minutes <= 0）
+        if minutes <= 0:
+            task_service.start_auto_loop()
+            logger.info("Auto loop enabled (no fixed interval).")
+            return
+
+        # 定时模式：确保自动循环停止
+        task_service.stop_auto_loop()
 
         # 添加新任务
         self.scheduler.add_job(
