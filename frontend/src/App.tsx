@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { SetupWizard } from './pages/SetupWizard';
 import { Dashboard } from './pages/Dashboard';
 import { apiService } from './services/api';
@@ -7,6 +7,9 @@ import './index.css';
 
 function App() {
   const [hasConstraint, setHasConstraint] = useState<boolean | null>(null);
+  const Router = window.easygetDesktop?.isDesktop || window.location.protocol === 'file:'
+    ? HashRouter
+    : BrowserRouter;
 
   useEffect(() => {
     const checkState = async () => {

@@ -1,4 +1,5 @@
 import asyncio
+import os
 import sys
 
 # Ensure Playwright subprocesses work on Windows (Selector loop lacks subprocess support)
@@ -64,12 +65,8 @@ async def log_requests(request: Request, call_next):
 # 配置 CORS 允许前端跨域
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-        "http://127.0.0.1:5174",
-        "http://localhost:5174",
-    ],
+    allow_origins=["null"],
+    allow_origin_regex=r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -79,4 +76,7 @@ app.include_router(router, prefix="/api")
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "instance_token": os.getenv("EASYGET_INSTANCE_TOKEN", "")
+    }

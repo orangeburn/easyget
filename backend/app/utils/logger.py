@@ -1,5 +1,5 @@
-import os
 from datetime import datetime
+from app.core.paths import get_log_path
 
 LOG_FILE = "backend_debug.log"
 
@@ -9,8 +9,7 @@ def debug_log(msg: str):
     formatted_msg = f"[{timestamp}] {msg}"
     print(formatted_msg, flush=True)
     try:
-        # 确保在 backend 目录下创建日志
-        log_path = os.path.join(os.getcwd(), LOG_FILE)
+        log_path = get_log_path()
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(formatted_msg + "\n")
     except:

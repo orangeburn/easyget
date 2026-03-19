@@ -2,13 +2,62 @@
   "name": "easyget-monorepo",
   "version": "1.0.0",
   "description": "Easyget Automation Bidding Hub",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev:frontend": "cd frontend && npm run dev",
     "dev:backend": "cd backend && uvicorn app.main:app --reload",
     "install:all": "npm run install:frontend && npm run install:backend",
     "install:frontend": "cd frontend && npm install",
-    "install:backend": "cd backend && pip install -r requirements.txt"
+    "install:backend": "cd backend && pip install -r requirements.txt",
+    "build:frontend": "cd frontend && npm run build",
+    "desktop:build:backend": "powershell -ExecutionPolicy Bypass -File scripts/build-backend.ps1",
+    "desktop:build": "powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^38.7.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.easyget.desktop",
+    "productName": "Easyget",
+    "icon": "build/icon.ico",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "logo.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "desktop-resources/backend",
+        "to": "backend"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "shortcutName": "Easyget",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
 }

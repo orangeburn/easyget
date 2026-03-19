@@ -51,6 +51,13 @@ async def run_collection_and_analysis(payload: Dict[str, Any]):
 
     # 2. 解析采集策略
     strategy = payload.get("strategy", {})
+
+    # 如果已有任务在跑，先终止旧任务，确保新配置生效（不影响自动循环）
+    try:
+        task_service.cancel_current_task()
+    except Exception as e:
+        debug_log(f"Task cancel failed before restart: {e}")
+    await asyncio.sleep(0)
     
     # 立即标记状态，防止前端轮询到“空闲”
     state.is_running = True

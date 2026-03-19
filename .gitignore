@@ -7,6 +7,15 @@ pnpm-debug.log*
 
 # Vite/React
 dist/
+release/
+desktop-resources/
+
+# Desktop build outputs
+build/
+backend/dist-desktop/
+backend/build-desktop/
+backend/build-spec/
+backend/*.spec
 
 # Python
 __pycache__/
@@ -38,6 +47,12 @@ backend/data/
 # Local data
 *.db
 tests_report.txt
+
+# Desktop packaging
+/node_modules/
+/package-lock.json
+/backend/build/
+/backend/dist/
 
 # OS
 .DS_Store

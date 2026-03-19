@@ -1,9 +1,32 @@
 const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api';
+  window.easygetDesktop?.apiBaseUrl ||
+  (import.meta as any).env?.VITE_API_BASE_URL ||
+  'http://127.0.0.1:8000/api';
 
 type RequestOptions = RequestInit & { expectText?: boolean; timeoutMs?: number };
 
-async function request<T>(path: string, options?: RequestOptions): Promise<T> {
+async function downloadResponse(response: Response, fallbackFilename: string) {
+  if (!response.ok) {
+    const errorData: any = await response.json().catch(() => ({}));
+    const detail = errorData.detail || errorData.message;
+    throw new Error(detail || `请求失败 (${response.status})`);
+  }
+
+  const blob = await response.blob();
+  const contentDisposition = response.headers.get('content-disposition') || '';
+  const matched = contentDisposition.match(/filename="?([^"]+)"?/i);
+  const filename = matched?.[1] || fallbackFilename;
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+async function request<T = any>(path: string, options?: RequestOptions): Promise<T> {
   try {
     const controller = new AbortController();
     const timeoutMs = options?.timeoutMs ?? 10000;
@@ -14,7 +37,7 @@ async function request<T>(path: string, options?: RequestOptions): Promise<T> {
     });
     clearTimeout(timeoutId);
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      const errorData: any = await response.json().catch(() => ({}));
       const detail = errorData.detail || errorData.message;
       throw new Error(detail || `请求失败 (${response.status})`);
     }
@@ -154,7 +177,8 @@ export const apiService = {
   },
 
   async exportClues() {
-    window.open(`${API_BASE_URL}/clues/export`, '_blank');
+    const response = await fetch(`${API_BASE_URL}/clues/export`);
+    await downloadResponse(response, 'easyget_clues.csv');
   },
   async exportCluesSelected(ids: string[]) {
     const response = await fetch(`${API_BASE_URL}/clues/export`, {
@@ -162,19 +186,6 @@ export const apiService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids })
     });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const detail = errorData.detail || errorData.message;
-      throw new Error(detail || `请求失败 (${response.status})`);
-    }
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'easyget_clues_selected.csv';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
+    await downloadResponse(response, 'easyget_clues_selected.csv');
   }
 };

@@ -6,6 +6,7 @@ from datetime import datetime
 from fastapi.encoders import jsonable_encoder
 import asyncio
 from typing import Set
+from app.utils.urls import sanitize_target_urls
 
 class SystemState:
     def __init__(self):
@@ -81,9 +82,9 @@ class SystemState:
             model.financial_thresholds = [q.model_dump() if hasattr(q, 'model_dump') else q for q in constraint.financial_thresholds]
             model.other_constraints = [q.model_dump() if hasattr(q, 'model_dump') else q for q in constraint.other_constraints]
             model.scan_frequency = constraint.scan_frequency if constraint.scan_frequency is not None else 30
-            model.custom_urls = constraint.custom_urls or []
+            model.custom_urls = sanitize_target_urls(constraint.custom_urls or [])
             model.wechat_accounts = constraint.wechat_accounts or []
-            model.updated_at = datetime.utcnow()
+            model.updated_at = datetime.now()
             
             db.commit()
 
@@ -113,11 +114,12 @@ class SystemState:
                         veto_reason=clue.veto_reason,
                         extracted_metadata=clue.extracted_metadata,
                         full_text=clue.full_text,
-                        markdown_text=clue.markdown_text,
-                        user_feedback=clue.user_feedback,
-                        is_archived=clue.is_archived,
-                        fingerprint=f"{clue.title}_{clue.source}"
-                    )
+                    markdown_text=clue.markdown_text,
+                    user_feedback=clue.user_feedback,
+                    is_archived=clue.is_archived,
+                    created_at=clue.created_at,
+                    fingerprint=f"{clue.title}_{clue.source}"
+                )
                     db.add(model)
             db.commit()
         except Exception as e:

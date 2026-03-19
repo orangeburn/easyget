@@ -3,7 +3,7 @@ import time
 from app.schemas.clue import ClueItem
 from app.schemas.constraint import BusinessConstraint
 from app.engines.analyzer.vector_store import HashingVectorizer, SimpleVectorStore
-import os
+from app.core.paths import get_vector_store_path
 
 class ClueEvaluator:
     """
@@ -17,10 +17,8 @@ class ClueEvaluator:
             "location_match": 20,
             "semantic_match": 20
         }
-        base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-        store_path = os.path.join(base_dir, "data", "vector_store.json")
         self.vectorizer = HashingVectorizer(dim=256)
-        self.vector_store = SimpleVectorStore(dim=256, path=store_path)
+        self.vector_store = SimpleVectorStore(dim=256, path=str(get_vector_store_path()))
         self._feedback_cache_at = 0.0
         self._feedback_cache = (0, 0)
 

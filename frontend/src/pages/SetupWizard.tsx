@@ -60,6 +60,28 @@ export const SetupWizard: React.FC = () => {
   });
   const [expandedKeywords, setExpandedKeywords] = useState<string[]>([]);
 
+  const sanitizeTargetUrls = (value: string) => {
+    const lines = value.split('\n').map((s) => s.trim()).filter(Boolean);
+    return lines.filter((line) => {
+      const raw = line.toLowerCase();
+      const normalized = raw.startsWith('http://') || raw.startsWith('https://')
+        ? raw
+        : `http://${raw}`;
+      try {
+        const parsed = new URL(normalized);
+        const host = parsed.hostname;
+        const path = parsed.pathname || '';
+        const query = parsed.search || '';
+        if ((host === 'baidu.com' || host === 'www.baidu.com') && (path === '' || path === '/') && !query) {
+          return false;
+        }
+      } catch {
+        // If URL parsing fails, keep it to avoid dropping user intent.
+      }
+      return true;
+    });
+  };
+
   const provinces = Object.keys(REGION_DATA);
 
   useEffect(() => {
@@ -121,7 +143,7 @@ export const SetupWizard: React.FC = () => {
       company_name: "手动任务",
       core_business: strategy.search_keywords ? strategy.search_keywords.split(/[,，\s]+/).filter(Boolean) : [],
       wechat_accounts: strategy.wechat_accounts.split('\n').map((s: string) => s.trim()).filter(Boolean),
-      custom_urls: strategy.target_urls.split('\n').map((s: string) => s.trim()).filter(Boolean),
+      custom_urls: sanitizeTargetUrls(strategy.target_urls),
       qualifications: [],
       geography_limits: strategy.province !== '全国' ? [{ name: '实施地域', value: regionValue, is_must_have: true }] : [],
       financial_thresholds: strategy.min_amount ? [{ name: '最小项目金额', value: strategy.min_amount, is_must_have: false }] : [],
@@ -131,7 +153,7 @@ export const SetupWizard: React.FC = () => {
 
     const formattedStrategy = {
       search_keywords: strategy.search_keywords,
-      target_urls: strategy.target_urls.split('\n').map((s: string) => s.trim()).filter(Boolean),
+      target_urls: sanitizeTargetUrls(strategy.target_urls),
       wechat_accounts: strategy.wechat_accounts.split('\n').map((s: string) => s.trim()).filter(Boolean),
       scan_frequency: Number(strategy.scan_frequency)
     };
@@ -297,19 +319,19 @@ export const SetupWizard: React.FC = () => {
               </div>
 
               <div className="form-item">
-                <label className="form-label">定向监控网址 (每行一个)</label>
+                <label className="form-label">定向监控网址 (每行一个)部分站点有较强反爬机制，可能会失败</label>
                 <textarea
                   className="form-input"
                   rows={2}
                   style={{ fontFamily: 'var(--mono)', fontSize: '14px' }}
-                  placeholder="https://www.ccgp.gov.cn/"
+                  placeholder="https://www.baidu.com/（示例，不会自动加入）"
                   value={strategy.target_urls}
                   onChange={e => setStrategy({ ...strategy, target_urls: e.target.value })}
                 />
               </div>
 
               <div className="form-item">
-                <label className="form-label">微信公众号 (每行一个)</label>
+                <label className="form-label">微信公众号 (每行一个)基于搜狗微信进行搜索，大概率搜不到任何信息</label>
                 <textarea
                   className="form-input"
                   rows={2}

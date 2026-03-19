@@ -126,6 +126,14 @@ export const StatusBar: React.FC = () => {
   return (
     <div className="status-bar">
       <div className="status-bar-inner">
+        <div className="status-brand" aria-label="Easyget">
+          <img
+            className="status-brand-mark"
+            src={`${import.meta.env.BASE_URL}logo.png`}
+            alt="Easyget logo"
+          />
+          <span className="status-brand-name">Easyget</span>
+        </div>
         <div className="status-item">
           <Search size={16} />
           <span className="label">当前策略:</span>

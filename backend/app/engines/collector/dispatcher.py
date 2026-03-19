@@ -7,6 +7,7 @@ from app.engines.collector.strategies import GeneralSearchStrategy
 from app.engines.collector.playwright_strategy import SiteSpecificStrategy
 from app.engines.collector.wechat_strategy import WechatStrategy
 from app.utils.keywords import split_search_keywords
+from app.utils.urls import sanitize_target_urls
 
 class CollectionDispatcher:
     """
@@ -60,7 +61,7 @@ class CollectionDispatcher:
         if constraint is None:
             print("[Dispatcher] 缺少企业画像（constraint=None），本次采集已跳过。")
             return []
-        target_urls = config.get("target_urls", [])
+        target_urls = sanitize_target_urls(config.get("target_urls", []))
         wechat_accounts = config.get("wechat_accounts", [])
         search_keywords = config.get("search_keywords", "")
 
@@ -73,7 +74,8 @@ class CollectionDispatcher:
             pass
         print(f"[Dispatcher] 启动混合采集任务: 搜索词({len(split_search_keywords(search_keywords))}) | 监控站({len(target_urls)}) | 公众号({len(wechat_accounts)})")
         general_results = await self.general_strategy.collect(constraint, search_keywords=search_keywords)
-        auto_portals = self._extract_portal_urls(general_results)
+        auto_portals_enabled = bool(config.get("auto_portals_enabled", False))
+        auto_portals = self._extract_portal_urls(general_results) if auto_portals_enabled else []
 
         # 合并用户指定与自动识别的站点
         merged_targets = list(target_urls) + auto_portals
@@ -123,7 +125,7 @@ class CollectionDispatcher:
         if constraint is None:
             print("[Dispatcher] 缺少企业画像（constraint=None），本次采集已跳过。")
             return []
-        target_urls = config.get("target_urls", [])
+        target_urls = sanitize_target_urls(config.get("target_urls", []))
         wechat_accounts = config.get("wechat_accounts", [])
         search_keywords = config.get("search_keywords", "")
 
@@ -140,7 +142,8 @@ class CollectionDispatcher:
             on_clue(clue)
 
         general_results = await self.general_strategy.collect(constraint, search_keywords=search_keywords, on_clue=safe_on_clue)
-        auto_portals = self._extract_portal_urls(general_results)
+        auto_portals_enabled = bool(config.get("auto_portals_enabled", False))
+        auto_portals = self._extract_portal_urls(general_results) if auto_portals_enabled else []
 
         merged_targets = list(target_urls) + auto_portals
         seen = set()

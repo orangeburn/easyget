@@ -2,12 +2,10 @@ from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, B
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
-import os
+from app.core.paths import get_db_path
 
-# Make DB path stable regardless of current working directory
-_BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-_DB_PATH = os.path.join(_BASE_DIR, "easyget.db").replace("\\", "/")
-DATABASE_URL = f"sqlite:///{_DB_PATH}"
+# Make DB path stable in both source and packaged desktop app modes.
+DATABASE_URL = f"sqlite:///{get_db_path().as_posix()}"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -26,7 +24,7 @@ class ConstraintModel(Base):
     scan_frequency = Column(Integer, default=30) # Default 30 minutes
     custom_urls = Column(JSON, default=[])
     wechat_accounts = Column(JSON, default=[])
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 class ClueModel(Base):
     __tablename__ = "clues"
@@ -44,7 +42,7 @@ class ClueModel(Base):
     markdown_text = Column(Text, nullable=True)
     user_feedback = Column(Integer, default=0) # 1: useful, -1: useless, 0: none
     is_archived = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
     
     # 记录原始指纹用于去重
     fingerprint = Column(String, index=True)
@@ -61,7 +59,7 @@ class SystemSettingsModel(Base):
     serper_api_key = Column(Text, nullable=True)
     tavily_api_enabled = Column(Boolean, default=False)
     tavily_api_key = Column(Text, nullable=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 # 自动创建表
 Base.metadata.create_all(bind=engine)

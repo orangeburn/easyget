@@ -45,6 +45,11 @@ class TaskService:
             self._auto_loop_task.cancel()
         self._auto_loop_task = None
 
+    def cancel_current_task(self):
+        """仅取消当前扫描任务，不影响自动循环调度。"""
+        if self._current_task and not self._current_task.done():
+            self._current_task.cancel()
+
     async def _auto_loop_runner(self):
         debug_log("TaskService: Auto loop started")
         while not self._stop_requested:
