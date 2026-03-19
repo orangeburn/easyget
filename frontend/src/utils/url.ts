@@ -6,6 +6,7 @@ export function normalizeClueUrl(url?: string, source?: string): string | undefi
     const map: Record<string, string> = {
       sogou: 'https://www.sogou.com',
       wechat: 'https://weixin.sogou.com',
+      定向公号: 'https://weixin.sogou.com',
       baidu: 'https://www.baidu.com',
       bing: 'https://cn.bing.com'
     };

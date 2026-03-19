@@ -22,7 +22,7 @@ class TaskScheduler:
         except Exception:
             pass
         if self.scheduler.running:
-            self.scheduler.shutdown()
+            self.scheduler.shutdown(wait=False)
             logger.info("Scheduler shut down.")
 
     def schedule_scan(self, minutes: int):

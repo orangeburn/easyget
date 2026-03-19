@@ -20,6 +20,29 @@
   gap: 40px;
 }
 
+.status-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.status-brand-mark {
+  width: 34px;
+  height: 34px;
+  display: block;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.status-brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
 .status-item {
   display: flex;
   align-items: center;
@@ -70,9 +93,19 @@
 }
 
 @media (max-width: 900px) {
+  .status-bar-inner {
+    gap: 20px;
+    padding: 10px 18px;
+  }
+
+  .status-brand-name {
+    display: none;
+  }
+
   .status-item.task-status {
     max-width: 440px;
   }
+
   .status-item.task-status .value {
     max-width: 340px;
   }

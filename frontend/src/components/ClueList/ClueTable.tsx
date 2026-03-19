@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, Download, Star, X, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, Download, Star, X, Info, ChevronLeft, ChevronRight, ChevronDown, CalendarDays } from 'lucide-react';
 import { ClueDetailDrawer } from './ClueDetailDrawer';
 import { apiService } from '../../services/api';
 import './ClueTable.css';
@@ -17,9 +17,10 @@ interface Clue {
     required_qualifications?: string[];
   };
   publish_time?: string;
+  created_at?: string;
 }
 
-type TabType = 'pending' | 'starred' | 'ignored' | 'filtered';
+type TabType = 'all' | 'pending' | 'starred' | 'ignored' | 'filtered';
 const PAGE_SIZE = 10;
 
 export const ClueTable: React.FC = () => {
@@ -27,10 +28,57 @@ export const ClueTable: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [selectedClue, setSelectedClue] = useState<Clue | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('pending');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [crawlDateFilter, setCrawlDateFilter] = useState('');
+  const [openFilter, setOpenFilter] = useState<'source' | 'date' | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 });
   const selectAllRef = useRef<HTMLInputElement | null>(null);
+  const sourceFilterRef = useRef<HTMLDivElement | null>(null);
+  const dateFilterRef = useRef<HTMLDivElement | null>(null);
+  const sourceTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const dateTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const sourcePopoverRef = useRef<HTMLDivElement | null>(null);
+  const datePopoverRef = useRef<HTMLDivElement | null>(null);
+
+  const getPopoverPosition = (
+    trigger: HTMLElement,
+    filterType: 'source' | 'date',
+    popover?: HTMLDivElement | null
+  ) => {
+    const rect = trigger.getBoundingClientRect();
+    const width = popover?.offsetWidth || (filterType === 'date' ? 292 : 192);
+    const height = popover?.offsetHeight || (filterType === 'date' ? 430 : 260);
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const gap = 10;
+
+    const fitsBelow = rect.bottom + gap + height <= viewportHeight - 12;
+    const top = fitsBelow
+      ? rect.bottom + gap
+      : Math.max(12, rect.top - height - gap);
+
+    const left = Math.min(
+      Math.max(12, rect.left),
+      Math.max(12, viewportWidth - width - 12)
+    );
+
+    return { top, left };
+  };
+
+  const openFilterPopover = (filterType: 'source' | 'date') => {
+    const trigger = filterType === 'source' ? sourceTriggerRef.current : dateTriggerRef.current;
+    if (trigger) {
+      setPopoverPosition(getPopoverPosition(trigger, filterType));
+    }
+    setOpenFilter(prev => (prev === filterType ? null : filterType));
+  };
 
   const cacheKey = 'easyget_clues_cache';
 
@@ -130,8 +178,10 @@ export const ClueTable: React.FC = () => {
     }
   };
 
-  const filteredClues = useMemo(() => {
+  const tabFilteredClues = useMemo(() => {
     switch (activeTab) {
+      case 'all':
+        return clues;
       case 'pending':
         // 未否决且未反馈
         return clues.filter(c => !c.veto_reason && c.user_feedback === 0);
@@ -147,6 +197,58 @@ export const ClueTable: React.FC = () => {
     }
   }, [clues, activeTab]);
 
+  const formatDateKey = (value?: string) => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return formatLocalDate(date);
+  };
+
+  const formatLocalDate = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const parseDateKey = (value?: string) => {
+    if (!value) return null;
+    const [yearStr, monthStr, dayStr] = value.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    const day = Number(dayStr);
+    if (!year || !month || !day) return null;
+    const date = new Date(year, month - 1, day);
+    if (Number.isNaN(date.getTime())) return null;
+    return date;
+  };
+
+  const filteredClues = useMemo(() => {
+    return tabFilteredClues.filter((clue) => {
+      const matchesSource = sourceFilter === 'all' || clue.source === sourceFilter;
+      const matchesDate = !crawlDateFilter || formatDateKey(clue.created_at) === crawlDateFilter;
+      return matchesSource && matchesDate;
+    });
+  }, [tabFilteredClues, sourceFilter, crawlDateFilter]);
+
+  const sourceOptions = useMemo(() => {
+    const preferredOrder = ['定向公号', '定向站点'];
+    const seen = new Set<string>();
+    const options: string[] = [];
+
+    preferredOrder.forEach((source) => {
+      seen.add(source);
+      options.push(source);
+    });
+
+    clues.forEach((clue) => {
+      if (!clue.source || seen.has(clue.source)) return;
+      seen.add(clue.source);
+      options.push(clue.source);
+    });
+    return options;
+  }, [clues]);
+
   const totalPages = Math.max(1, Math.ceil(filteredClues.length / PAGE_SIZE));
 
   useEffect(() => {
@@ -155,7 +257,61 @@ export const ClueTable: React.FC = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab]);
+  }, [activeTab, sourceFilter, crawlDateFilter]);
+
+  useEffect(() => {
+    if (!openFilter) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      const clickedSource = sourceFilterRef.current?.contains(target);
+      const clickedDate = dateFilterRef.current?.contains(target);
+      const clickedSourcePopover = sourcePopoverRef.current?.contains(target);
+      const clickedDatePopover = datePopoverRef.current?.contains(target);
+      if (clickedSource || clickedDate || clickedSourcePopover || clickedDatePopover) return;
+      setOpenFilter(null);
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenFilter(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [openFilter]);
+
+  useLayoutEffect(() => {
+    if (!openFilter) return;
+
+    const updatePosition = () => {
+      const trigger =
+        openFilter === 'source' ? sourceTriggerRef.current : dateTriggerRef.current;
+      const popover =
+        openFilter === 'source' ? sourcePopoverRef.current : datePopoverRef.current;
+      if (!trigger) return;
+      setPopoverPosition(getPopoverPosition(trigger, openFilter, popover));
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [openFilter]);
+
+  useEffect(() => {
+    if (openFilter !== 'date') return;
+    const baseDate = parseDateKey(crawlDateFilter) ?? new Date();
+    setCalendarMonth(new Date(baseDate.getFullYear(), baseDate.getMonth(), 1));
+  }, [openFilter, crawlDateFilter]);
 
   const paginatedClues = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
@@ -241,6 +397,55 @@ export const ClueTable: React.FC = () => {
     setSelectedIds(new Set());
   };
 
+  const formatDateTime = (value?: string) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getRelativeDate = (offsetDays: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() + offsetDays);
+    return formatLocalDate(date);
+  };
+
+  const todayDateKey = getRelativeDate(0);
+  const calendarMonthLabel = calendarMonth.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long'
+  });
+  const calendarWeekdays = ['一', '二', '三', '四', '五', '六', '日'];
+  const calendarDays = useMemo(() => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const leadingEmpty = (firstDay.getDay() + 6) % 7;
+    const days: Array<{ key: string; label?: number; dateKey?: string; empty?: boolean }> = [];
+
+    for (let index = 0; index < leadingEmpty; index += 1) {
+      days.push({ key: `empty-${index}`, empty: true });
+    }
+
+    for (let day = 1; day <= totalDays; day += 1) {
+      const date = new Date(year, month, day);
+      days.push({
+        key: `day-${day}`,
+        label: day,
+        dateKey: formatLocalDate(date)
+      });
+    }
+
+    return days;
+  }, [calendarMonth]);
+
   if (loading && clues.length === 0) {
     return (
       <div className="loading-state">
@@ -251,6 +456,7 @@ export const ClueTable: React.FC = () => {
   }
 
   const tabs: { key: TabType; label: string; count: number }[] = [
+    { key: 'all', label: '全部', count: clues.length },
     { key: 'pending', label: '待处理', count: clues.filter(c => !c.veto_reason && c.user_feedback === 0).length },
     { key: 'starred', label: '已收藏', count: clues.filter(c => c.user_feedback === 1).length },
     { key: 'ignored', label: '已忽略', count: clues.filter(c => c.user_feedback === 2).length },
@@ -258,11 +464,143 @@ export const ClueTable: React.FC = () => {
   ];
 
   const tabTips: Record<TabType, string> = {
+    all: '显示系统当前已采集到的全部线索。',
     pending: '未处理且未被过滤的线索，建议优先查看。',
     starred: '已收藏的高意向线索。',
     ignored: '已被你手动忽略的线索，有效期 7 天。',
     filtered: '被 LLM 或规则判定为无效的线索，有效期 7 天。'
   };
+
+  const renderSourcePopover = () => (
+    <div
+      ref={sourcePopoverRef}
+      className="filter-popover filter-popover-floating"
+      style={{ top: popoverPosition.top, left: popoverPosition.left }}
+    >
+      <button
+        type="button"
+        className={`filter-option ${sourceFilter === 'all' ? 'active' : ''}`}
+        onClick={() => {
+          setSourceFilter('all');
+          setOpenFilter(null);
+        }}
+      >
+        全部来源
+      </button>
+      {sourceOptions.map((source) => (
+        <button
+          key={source}
+          type="button"
+          className={`filter-option ${sourceFilter === source ? 'active' : ''}`}
+          onClick={() => {
+            setSourceFilter(source);
+            setOpenFilter(null);
+          }}
+        >
+          {source}
+        </button>
+      ))}
+    </div>
+  );
+
+  const renderDatePopover = () => (
+    <div
+      ref={datePopoverRef}
+      className="filter-popover filter-popover-floating date-filter-popover"
+      style={{ top: popoverPosition.top, left: popoverPosition.left }}
+    >
+      <div className="filter-popover-header">
+        <div className="filter-popover-title-row">
+          <CalendarDays size={15} />
+          <span className="filter-popover-title">按爬取日期筛选</span>
+        </div>
+        <p className="filter-popover-desc">只显示在所选日期抓取到的线索。</p>
+      </div>
+      <div className="filter-quick-actions">
+        <button
+          type="button"
+          className={`filter-chip ${crawlDateFilter === getRelativeDate(0) ? 'active' : ''}`}
+          onClick={() => setCrawlDateFilter(getRelativeDate(0))}
+        >
+          今天
+        </button>
+        <button
+          type="button"
+          className={`filter-chip ${crawlDateFilter === getRelativeDate(-1) ? 'active' : ''}`}
+          onClick={() => setCrawlDateFilter(getRelativeDate(-1))}
+        >
+          昨天
+        </button>
+      </div>
+      <div className="calendar-panel">
+        <div className="calendar-toolbar">
+          <button
+            type="button"
+            className="calendar-nav-btn"
+            onClick={() =>
+              setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
+            }
+            aria-label="上个月"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <div className="calendar-month-label">{calendarMonthLabel}</div>
+          <button
+            type="button"
+            className="calendar-nav-btn"
+            onClick={() =>
+              setCalendarMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
+            }
+            aria-label="下个月"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+        <div className="calendar-weekdays">
+          {calendarWeekdays.map((weekday) => (
+            <span key={weekday} className="calendar-weekday">
+              {weekday}
+            </span>
+          ))}
+        </div>
+        <div className="calendar-grid">
+          {calendarDays.map((day) =>
+            day.empty ? (
+              <span key={day.key} className="calendar-day-empty" />
+            ) : (
+              <button
+                key={day.key}
+                type="button"
+                className={`calendar-day-btn ${crawlDateFilter === day.dateKey ? 'active' : ''} ${todayDateKey === day.dateKey ? 'today' : ''}`}
+                onClick={() => setCrawlDateFilter(day.dateKey || '')}
+              >
+                {day.label}
+              </button>
+            )
+          )}
+        </div>
+      </div>
+      <div className="filter-popover-actions">
+        <button
+          type="button"
+          className="filter-action-btn"
+          onClick={() => {
+            setCrawlDateFilter('');
+            setOpenFilter(null);
+          }}
+        >
+          清除
+        </button>
+        <button
+          type="button"
+          className="filter-action-btn primary"
+          onClick={() => setOpenFilter(null)}
+        >
+          完成
+        </button>
+      </div>
+    </div>
+  );
 
   // Force HMR Update - New Table Version v2
   return (
@@ -321,15 +659,40 @@ export const ClueTable: React.FC = () => {
                 </th>
               )}
               <th className="th-title">线索名称</th>
-              <th className="th-source">来源</th>
+              <th className="th-source">
+                <div className="th-filter-wrap" ref={sourceFilterRef}>
+                  <button
+                    ref={sourceTriggerRef}
+                    type="button"
+                    className={`th-filter-trigger ${openFilter === 'source' ? 'open' : ''} ${sourceFilter !== 'all' ? 'active' : ''}`}
+                    onClick={() => openFilterPopover('source')}
+                  >
+                    <span className="th-filter-label">来源</span>
+                    <ChevronDown size={14} />
+                  </button>
+                </div>
+              </th>
               <th className="th-time">招标信息发布时间</th>
+              <th className="th-time">
+                <div className="th-filter-wrap" ref={dateFilterRef}>
+                  <button
+                    ref={dateTriggerRef}
+                    type="button"
+                    className={`th-filter-trigger ${openFilter === 'date' ? 'open' : ''} ${crawlDateFilter ? 'active' : ''}`}
+                    onClick={() => openFilterPopover('date')}
+                  >
+                    <span className="th-filter-label">爬取时间</span>
+                    <ChevronDown size={14} />
+                  </button>
+                </div>
+              </th>
               <th className="th-actions">操作</th>
             </tr>
           </thead>
           <tbody>
             {filteredClues.length === 0 ? (
               <tr>
-                <td colSpan={selectionMode ? 5 : 4} className="td-empty">
+                <td colSpan={selectionMode ? 6 : 5} className="td-empty">
                   当前分类下暂无发现...
                 </td>
               </tr>
@@ -356,27 +719,42 @@ export const ClueTable: React.FC = () => {
                     <span className="source-tag">{clue.source}</span>
                   </td>
                   <td className="td-time">
-                    {clue.publish_time ? new Date(clue.publish_time).toLocaleDateString() : '-'}
+                    {formatDateTime(clue.publish_time)}
+                  </td>
+                  <td className="td-time td-crawled-time">
+                    {formatDateTime(clue.created_at)}
                   </td>
                   <td className="td-actions">
                     <div className="actions-group">
                       <button 
+                        type="button"
                         className={`action-btn star ${clue.user_feedback === 1 ? 'active' : ''}`}
-                        onClick={() => handleFeedback(clue.id, 1)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleFeedback(clue.id, 1);
+                        }}
                         title="收藏"
                       >
                         <Star size={16} fill={clue.user_feedback === 1 ? "#EAB308" : "none"} stroke="currentColor" />
                       </button>
                       <button 
+                        type="button"
                         className={`action-btn ignore ${clue.user_feedback === 2 ? 'active' : ''}`}
-                        onClick={() => handleFeedback(clue.id, 2)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleFeedback(clue.id, 2);
+                        }}
                         title="忽略"
                       >
                         <X size={16} stroke="currentColor" />
                       </button>
                       <button 
+                        type="button"
                         className="action-btn detail"
-                        onClick={() => setSelectedClue(clue)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedClue(clue);
+                        }}
                         title="详情"
                       >
                         <Info size={16} stroke="currentColor" />
@@ -390,12 +768,23 @@ export const ClueTable: React.FC = () => {
         </table>
       </div>
 
+      {openFilter === 'source' && renderSourcePopover()}
+      {openFilter === 'date' && renderDatePopover()}
+
       {filteredClues.length > 0 && (
         <div className="table-pagination">
           <div className="pagination-summary">
             当前显示 {pageStart}-{pageEnd} / 共 {filteredClues.length} 条
           </div>
           <div className="pagination-controls">
+            <button
+              className="pagination-btn page-jump"
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              title="首页"
+            >
+              首页
+            </button>
             <button
               className="pagination-btn"
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}

@@ -45,6 +45,10 @@ async def lifespan(app: FastAPI):
         task_service.request_stop()
     except Exception:
         pass
+    try:
+        await task_service.wait_for_stop(timeout_s=5.0)
+    except Exception as e:
+        debug_log(f"TaskService wait_for_stop failed during shutdown: {e}")
     scheduler_manager.shutdown()
     debug_log("--- Server Lifespan Shutdown ---")
 
@@ -57,7 +61,12 @@ app = FastAPI(
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start_time = time.time()
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except asyncio.CancelledError:
+        duration = time.time() - start_time
+        debug_log(f"Request cancelled during shutdown: {request.method} {request.url.path} - Duration: {duration:.2f}s")
+        raise
     duration = time.time() - start_time
     debug_log(f"Request: {request.method} {request.url.path} - Status: {response.status_code} - Duration: {duration:.2f}s")
     return response

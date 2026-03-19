@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, Boolean, Text, text, inspect
+from sqlalchemy import create_engine, Column, String, Integer, DateTime, JSON, Boolean, Text, text, inspect, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
@@ -7,9 +7,22 @@ from app.core.paths import get_db_path
 # Make DB path stable in both source and packaged desktop app modes.
 DATABASE_URL = f"sqlite:///{get_db_path().as_posix()}"
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False, "timeout": 30},
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+
+@event.listens_for(engine, "connect")
+def _configure_sqlite(dbapi_connection, _connection_record):
+    """Reduce read/write blocking under concurrent desktop usage."""
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA busy_timeout = 30000")
+    cursor.close()
 
 class ConstraintModel(Base):
     __tablename__ = "constraints"

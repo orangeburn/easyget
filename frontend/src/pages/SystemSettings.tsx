@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import './SetupWizard.css';
 import './SystemSettings.css';
@@ -40,8 +40,11 @@ const DEFAULT_SETTINGS: SystemSettingsState = {
   browser_search_enabled: true
 };
 
+const SETTINGS_CACHE_KEY = 'easyget_system_settings_cache';
+
 export const SystemSettings: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [settings, setSettings] = useState<SystemSettingsState>(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -50,25 +53,79 @@ export const SystemSettings: React.FC = () => {
   const [testResult, setTestResult] = useState<SystemSettingsTestResult | null>(null);
 
   useEffect(() => {
-    const fetchSettings = async () => {
+    let isCancelled = false;
+
+    const readCachedSettings = () => {
       try {
-        const data = await apiService.getSystemSettings() as SystemSettingsState;
-        setSettings({ ...DEFAULT_SETTINGS, ...data });
-      } catch (error) {
-        console.error('Failed to fetch system settings:', error);
-      } finally {
+        const raw = localStorage.getItem(SETTINGS_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return null;
+        return { ...DEFAULT_SETTINGS, ...parsed };
+      } catch {
+        return null;
+      }
+    };
+
+    const persistSettingsCache = (nextSettings: SystemSettingsState) => {
+      try {
+        localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(nextSettings));
+      } catch {
+        // ignore storage errors
+      }
+    };
+
+    const fetchSettings = async () => {
+      setIsLoading(true);
+      const cached = readCachedSettings();
+      if (cached) {
+        setSettings(cached);
+      }
+
+      let loaded = false;
+      let lastError: unknown = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const data = await apiService.getSystemSettings() as SystemSettingsState;
+          if (isCancelled) return;
+          const nextSettings = { ...DEFAULT_SETTINGS, ...data };
+          setSettings(nextSettings);
+          persistSettingsCache(nextSettings);
+          loaded = true;
+          break;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+
+      if (!loaded && !cached) {
+        console.error('Failed to fetch system settings:', lastError);
+        setSettings(DEFAULT_SETTINGS);
+      }
+
+      if (!isCancelled) {
         setIsLoading(false);
       }
     };
+
     fetchSettings();
-  }, []);
+    return () => {
+      isCancelled = true;
+    };
+  }, [location.pathname]);
 
   const handleSave = async () => {
     if (!validateSettings()) return;
     setIsSaving(true);
     try {
       const data = await apiService.updateSystemSettings(settings) as SystemSettingsState;
-      setSettings({ ...DEFAULT_SETTINGS, ...data });
+      const nextSettings = { ...DEFAULT_SETTINGS, ...data };
+      setSettings(nextSettings);
+      try {
+        localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(nextSettings));
+      } catch {
+        // ignore storage errors
+      }
       setIsSaved(true);
       setTestResult(null);
       setTimeout(() => {

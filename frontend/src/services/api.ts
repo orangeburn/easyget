@@ -172,7 +172,8 @@ export const apiService = {
     return request(`/clues/${clueId}/feedback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ feedback })
+      body: JSON.stringify({ feedback }),
+      timeoutMs: 30000
     });
   },
 

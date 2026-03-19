@@ -45,6 +45,23 @@ class TaskService:
             self._auto_loop_task.cancel()
         self._auto_loop_task = None
 
+    async def wait_for_stop(self, timeout_s: float = 5.0):
+        """Best-effort wait for running background tasks to stop during shutdown."""
+        pending = []
+        if self._current_task and not self._current_task.done():
+            pending.append(self._current_task)
+        if self._auto_loop_task and not self._auto_loop_task.done():
+            pending.append(self._auto_loop_task)
+        if not pending:
+            return
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*pending, return_exceptions=True),
+                timeout=timeout_s,
+            )
+        except asyncio.TimeoutError:
+            debug_log(f"TaskService: Shutdown wait timed out after {timeout_s}s")
+
     def cancel_current_task(self):
         """仅取消当前扫描任务，不影响自动循环调度。"""
         if self._current_task and not self._current_task.done():

@@ -57,27 +57,29 @@ class CluePipeline:
         def is_similar(a: str, b: str) -> bool:
             return SequenceMatcher(None, a, b).ratio() > 0.85
 
+        def load_existing_clues():
+            db = SessionLocal()
+            try:
+                return db.query(ClueModel).order_by(ClueModel.created_at.desc()).limit(200).all()
+            finally:
+                db.close()
+
         # 1. 基础去重与数据库比对
-        db = SessionLocal()
         processed_raw_clues = []
-        try:
-            # 获取最近的线索指纹用于快速比对
-            existing_clues = db.query(ClueModel).order_by(ClueModel.created_at.desc()).limit(200).all()
-            
-            for raw in raw_clues:
-                is_duplicate = False
-                for existing in existing_clues:
-                    # 语义级别判断：标题极其相似且来源一致，或内容极其相似
-                    if is_similar(raw.title, existing.title) or (raw.snippet and is_similar(raw.snippet, existing.snippet)):
-                        is_duplicate = True
-                        break
-                
-                if is_duplicate:
-                    raw.veto_reason = "内容重复"
-                
-                processed_raw_clues.append(raw)
-        finally:
-            db.close()
+        existing_clues = await asyncio.to_thread(load_existing_clues)
+
+        for raw in raw_clues:
+            is_duplicate = False
+            for existing in existing_clues:
+                # 语义级别判断：标题极其相似且来源一致，或内容极其相似
+                if is_similar(raw.title, existing.title) or (raw.snippet and is_similar(raw.snippet, existing.snippet)):
+                    is_duplicate = True
+                    break
+
+            if is_duplicate:
+                raw.veto_reason = "内容重复"
+
+            processed_raw_clues.append(raw)
         
         if not processed_raw_clues:
             return []
@@ -117,12 +119,15 @@ class CluePipeline:
         def is_similar(a: str, b: str) -> bool:
             return SequenceMatcher(None, a, b).ratio() > 0.85
 
+        def load_existing_clues():
+            db = SessionLocal()
+            try:
+                return db.query(ClueModel).order_by(ClueModel.created_at.desc()).limit(200).all()
+            finally:
+                db.close()
+
         # 预加载最近的线索用于去重
-        db = SessionLocal()
-        try:
-            existing_clues = db.query(ClueModel).order_by(ClueModel.created_at.desc()).limit(200).all()
-        finally:
-            db.close()
+        existing_clues = await asyncio.to_thread(load_existing_clues)
 
         sem = asyncio.Semaphore(10)
 
@@ -136,14 +141,14 @@ class CluePipeline:
             if is_duplicate:
                 item.veto_reason = "内容重复"
                 state.publish_clue(item)
-                state.add_clues([item])
+                await asyncio.to_thread(state.add_clues, [item])
                 return
 
             # 2) LLM 过滤
             async with sem:
                 processed = await self._process_single_clue(item, constraint)
             state.publish_clue(processed)
-            state.add_clues([processed])
+            await asyncio.to_thread(state.add_clues, [processed])
 
         async def worker():
             while True:

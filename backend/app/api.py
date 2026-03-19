@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request, HTTPException
 import asyncio
+import time
 from typing import Dict, Any, List
 from app.schemas.constraint import BusinessConstraint
 from app.schemas.clue import ClueItem
@@ -14,22 +15,26 @@ router = APIRouter()
 @router.get("/state")
 async def get_system_state():
     """获取当前系统状态（配置、进度等）"""
-    return {
-        "has_constraint": state.constraint is not None,
-        "is_running": state.is_running,
-        "is_paused": state.is_paused,
-        "current_progress": state.current_progress,
-        "current_step": state.current_step,
-        "company_name": state.constraint.company_name if state.constraint else None,
-        "search_keywords": " ".join(state.constraint.core_business) if state.constraint and state.constraint.core_business else "",
-        "target_urls": "\n".join(state.constraint.custom_urls) if state.constraint and state.constraint.custom_urls else "",
-        "wechat_accounts": "\n".join(state.constraint.wechat_accounts) if state.constraint and state.constraint.wechat_accounts else "",
-        "geography_limits": state.constraint.geography_limits if state.constraint else [],
-        "financial_thresholds": state.constraint.financial_thresholds if state.constraint else [],
-        "other_constraints": state.constraint.other_constraints if state.constraint else [],
-        "scan_frequency": state.constraint.scan_frequency if state.constraint else 30,
-        "expanded_keywords": state.last_expanded_keywords
-    }
+    def build_state_payload():
+        constraint = state.constraint
+        return {
+            "has_constraint": constraint is not None,
+            "is_running": state.is_running,
+            "is_paused": state.is_paused,
+            "current_progress": state.current_progress,
+            "current_step": state.current_step,
+            "company_name": constraint.company_name if constraint else None,
+            "search_keywords": " ".join(constraint.core_business) if constraint and constraint.core_business else "",
+            "target_urls": "\n".join(constraint.custom_urls) if constraint and constraint.custom_urls else "",
+            "wechat_accounts": "\n".join(constraint.wechat_accounts) if constraint and constraint.wechat_accounts else "",
+            "geography_limits": constraint.geography_limits if constraint else [],
+            "financial_thresholds": constraint.financial_thresholds if constraint else [],
+            "other_constraints": constraint.other_constraints if constraint else [],
+            "scan_frequency": constraint.scan_frequency if constraint else 30,
+            "expanded_keywords": state.last_expanded_keywords
+        }
+
+    return await asyncio.to_thread(build_state_payload)
 
 @router.post("/task/run")
 async def run_collection_and_analysis(payload: Dict[str, Any]):
@@ -98,7 +103,7 @@ async def test_settings(payload: SystemSettingsPayload):
 @router.get("/clues", response_model=List[ClueItem])
 async def get_clues():
     """获取已发现的线索列表"""
-    return state.clues
+    return await asyncio.to_thread(lambda: state.clues)
 
 @router.get("/clues/stream")
 async def stream_clues(request: Request):
@@ -132,7 +137,11 @@ async def update_clue_feedback(clue_id: str, payload: Dict[str, Any]):
     """更新线索的用户反馈状态"""
     feedback = payload.get("feedback")
     archived = payload.get("archived")
-    state.update_clue_status(clue_id, feedback=feedback, archived=archived)
+    started_at = time.perf_counter()
+    await asyncio.to_thread(state.update_clue_status, clue_id, feedback=feedback, archived=archived)
+    elapsed_ms = (time.perf_counter() - started_at) * 1000
+    if elapsed_ms > 1000:
+        debug_log(f"Clue feedback update slow: clue_id={clue_id}, elapsed_ms={elapsed_ms:.0f}")
     return {"status": "success"}
 
 @router.get("/clues/export")

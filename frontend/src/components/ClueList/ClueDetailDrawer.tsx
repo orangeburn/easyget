@@ -15,6 +15,7 @@ export const ClueDetailDrawer: React.FC<ClueDetailProps> = ({ clue, isOpen, onCl
 
   const metadata = clue.extracted_metadata || {};
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isWechatLikeSource = clue.source === 'wechat' || clue.source === '定向公号';
 
   useEffect(() => {
     if (!isOpen) {
@@ -55,7 +56,7 @@ export const ClueDetailDrawer: React.FC<ClueDetailProps> = ({ clue, isOpen, onCl
               <span className="dot">•</span>
               <span>{clue.publish_time ? new Date(clue.publish_time).toLocaleString() : '未知时间'}</span>
             </div>
-            {clue.source === 'wechat' && (
+            {isWechatLikeSource && (
               <div className="header-actions-inline">
                 <button className="btn-copy-title-header" onClick={handleCopyTitle}>
                   复制标题并在微信搜索
@@ -93,7 +94,7 @@ export const ClueDetailDrawer: React.FC<ClueDetailProps> = ({ clue, isOpen, onCl
                   >
                     {clue.url || '未知'}
                   </a>
-                  {clue.source === 'wechat' && (
+                  {isWechatLikeSource && (
                     <div className="link-hint">
                       <AlertTriangle size={12} /> 链接可能失效，已为您抓取全文展示在下方
                     </div>

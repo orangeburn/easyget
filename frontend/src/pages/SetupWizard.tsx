@@ -39,6 +39,19 @@ const REGION_DATA: Record<string, string[]> = {
   '西藏': ['拉萨', '日喀则', '昌都', '林芝', '山南', '那曲', '阿里'],
 };
 
+const DEFAULT_STRATEGY = {
+  search_keywords: '',
+  target_urls: '',
+  wechat_accounts: '',
+  province: '全国',
+  city: '',
+  min_amount: '',
+  time_range: 'all',
+  scan_frequency: 30
+};
+
+const CONFIG_CACHE_KEY = 'easyget_setup_strategy_cache';
+
 export const SetupWizard: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -48,16 +61,7 @@ export const SetupWizard: React.FC = () => {
 
   const isInDashboard = location.pathname.includes('/dashboard');
 
-  const [strategy, setStrategy] = useState({
-    search_keywords: '',
-    target_urls: '',
-    wechat_accounts: '',
-    province: '全国',
-    city: '',
-    min_amount: '',
-    time_range: 'all',
-    scan_frequency: 30
-  });
+  const [strategy, setStrategy] = useState(DEFAULT_STRATEGY);
   const [expandedKeywords, setExpandedKeywords] = useState<string[]>([]);
 
   const sanitizeTargetUrls = (value: string) => {
@@ -82,36 +86,92 @@ export const SetupWizard: React.FC = () => {
     });
   };
 
+  const readCachedStrategy = () => {
+    try {
+      const raw = localStorage.getItem(CONFIG_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      return {
+        ...DEFAULT_STRATEGY,
+        ...parsed
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const persistStrategyCache = (nextStrategy: typeof DEFAULT_STRATEGY) => {
+    try {
+      localStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(nextStrategy));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const buildStrategyFromState = (data: any) => {
+    if (!data?.has_constraint) {
+      return DEFAULT_STRATEGY;
+    }
+
+    const regionFull = data.geography_limits?.[0]?.value || '全国';
+    const [prevProv, prevCity] = String(regionFull).split('-');
+    return {
+      search_keywords: data.search_keywords || '',
+      target_urls: data.target_urls || '',
+      wechat_accounts: data.wechat_accounts || '',
+      province: prevProv || '全国',
+      city: prevCity || '',
+      min_amount: data.financial_thresholds?.[0]?.value || '',
+      time_range: data.other_constraints?.find((c: any) => c.name === '发布时间')?.value || 'all',
+      scan_frequency: data.scan_frequency || 30
+    };
+  };
+
   const provinces = Object.keys(REGION_DATA);
 
   useEffect(() => {
-    const fetchPrevConfig = async () => {
-      try {
-        const data = await apiService.getSystemState() as any;
-        if (data.has_constraint) {
-          const regionFull = data.geography_limits?.[0]?.value || '全国';
-          const [prevProv, prevCity] = regionFull.split('-');
+    let isCancelled = false;
 
-          setStrategy({
-            search_keywords: data.search_keywords || '',
-            target_urls: data.target_urls || '', // 后端现在返回的是 \n 分隔的字符串
-            wechat_accounts: data.wechat_accounts || '', // 同上
-            province: prevProv || '全国',
-            city: prevCity || '',
-            min_amount: data.financial_thresholds?.[0]?.value || '',
-            time_range: data.other_constraints?.find((c: any) => c.name === '发布时间')?.value || 'all',
-            scan_frequency: data.scan_frequency || 30
-          });
+    const fetchPrevConfig = async () => {
+      setIsLoadingState(true);
+      const cached = readCachedStrategy();
+      if (cached) {
+        setStrategy(cached);
+      }
+
+      let loaded = false;
+      let lastError: unknown = null;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const data = await apiService.getSystemState(8000) as any;
+          if (isCancelled) return;
+          const nextStrategy = buildStrategyFromState(data);
+          setStrategy(nextStrategy);
+          persistStrategyCache(nextStrategy);
+          setExpandedKeywords(Array.isArray(data?.expanded_keywords) ? data.expanded_keywords : []);
+          loaded = true;
+          break;
+        } catch (err) {
+          lastError = err;
         }
-        setExpandedKeywords(Array.isArray((data as any).expanded_keywords) ? (data as any).expanded_keywords : []);
-      } catch (err) {
-        console.warn('Failed to fetch previous state', err);
-      } finally {
+      }
+
+      if (!loaded && !cached) {
+        console.warn('Failed to fetch previous state', lastError);
+        setStrategy(DEFAULT_STRATEGY);
+      }
+
+      if (!isCancelled) {
         setIsLoadingState(false);
       }
     };
+
     fetchPrevConfig();
-  }, []);
+    return () => {
+      isCancelled = true;
+    };
+  }, [location.pathname]);
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -157,6 +217,17 @@ export const SetupWizard: React.FC = () => {
       wechat_accounts: strategy.wechat_accounts.split('\n').map((s: string) => s.trim()).filter(Boolean),
       scan_frequency: Number(strategy.scan_frequency)
     };
+
+    persistStrategyCache({
+      search_keywords: strategy.search_keywords,
+      target_urls: strategy.target_urls,
+      wechat_accounts: strategy.wechat_accounts,
+      province: strategy.province,
+      city: strategy.city,
+      min_amount: strategy.min_amount,
+      time_range: strategy.time_range,
+      scan_frequency: Number(strategy.scan_frequency)
+    });
 
     try {
       await apiService.activateTask(constraint, formattedStrategy);

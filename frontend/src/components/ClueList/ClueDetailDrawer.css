@@ -46,17 +46,27 @@
 }
 
 .close-btn {
-  background: none;
-  border: none;
-  padding: 4px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px solid rgba(17, 17, 17, 0.12);
+  border-radius: 10px;
+  padding: 0;
   cursor: pointer;
-  color: var(--text-tertiary);
-  transition: color 0.2s;
-  margin-top: 4px;
+  color: #5a5a5a;
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+  margin-top: 2px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 .close-btn:hover {
-  color: var(--text-primary);
+  color: #111111;
+  background: #f5f5f5;
+  border-color: rgba(17, 17, 17, 0.22);
+  transform: translateY(-1px);
 }
 
 .header-main {
@@ -86,21 +96,28 @@
 }
 
 .btn-copy-title-header {
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 14px;
   font-size: 12px;
-  font-weight: 600;
-  color: white;
-  background-color: var(--brand-primary);
-  border: none;
-  border-radius: 6px;
+  font-weight: 700;
+  color: #111111;
+  background: #ffffff;
+  border: 1px solid rgba(17, 17, 17, 0.14);
+  border-radius: 999px;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(var(--brand-primary-rgb, 59, 130, 246), 0.3);
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
 .btn-copy-title-header:hover {
-  filter: brightness(1.1);
+  background: #111111;
+  color: #ffffff;
+  border-color: #111111;
   transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(17, 17, 17, 0.14);
 }
 
 .dot {
@@ -186,19 +203,21 @@
 .btn-copy-title {
   padding: 4px 10px;
   font-size: 11px;
-  font-weight: 600;
-  color: white;
-  background-color: var(--brand-primary);
-  border: none;
-  border-radius: 4px;
+  font-weight: 700;
+  color: #111111;
+  background: #ffffff;
+  border: 1px solid rgba(17, 17, 17, 0.14);
+  border-radius: 999px;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
 .btn-copy-title:hover {
-  filter: brightness(1.1);
+  background: #111111;
+  color: #ffffff;
+  border-color: #111111;
   transform: translateY(-1px);
 }
 
@@ -336,43 +355,55 @@
   justify-content: center;
   gap: 8px;
   padding: 12px;
-  border: 1px solid var(--border-light);
+  border: 1px solid rgba(17, 17, 17, 0.14);
   border-radius: var(--radius-md);
   font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  transition: background-color 0.2s;
+  font-weight: 700;
+  color: #111111;
+  background: #ffffff;
+  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
 .btn-link:hover {
-  background-color: var(--bg-surface-hover);
+  background-color: #f5f5f5;
+  border-color: rgba(17, 17, 17, 0.22);
+  color: #111111;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
 }
 
 .btn-primary {
   flex: 1.5;
-  background-color: var(--text-primary);
-  color: white;
-  border: none;
+  background-color: #111111;
+  color: #ffffff;
+  border: 1px solid #111111;
   border-radius: var(--radius-md);
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.2s, background-color 0.2s, color 0.2s;
+  transition: transform 0.2s ease, opacity 0.2s, background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s ease;
+  box-shadow: 0 10px 24px rgba(17, 17, 17, 0.16);
 }
 
 .btn-primary:hover:not(:disabled) {
-  opacity: 0.92;
+  opacity: 1;
+  background: #000000;
+  border-color: #000000;
+  transform: translateY(-1px);
 }
 
 .btn-primary:disabled {
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: 0.5;
+  box-shadow: none;
 }
 
 .btn-primary.is-active {
-  background-color: #f1f1f1;
+  background-color: #f3f3f3;
   color: #111111;
-  border: 1px solid rgba(17, 17, 17, 0.12);
+  border: 1px solid rgba(17, 17, 17, 0.14);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
 
