@@ -177,7 +177,7 @@ export const StatusBar: React.FC = () => {
                 : '开始任务'
             }
           >
-            {isTriggering ? '处理中...' : state?.is_running ? '暂停' : '开始'}
+            {state?.is_running ? '暂停' : '开始'}
           </button>
         </div>
         <div className="status-info">
