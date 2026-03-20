@@ -28,6 +28,12 @@ type SystemSettingsTestResult = {
   browser?: ProviderTestResult;
 };
 
+type WarningModalState = {
+  title: string;
+  message: string;
+  confirmAction: 'save' | 'back';
+} | null;
+
 const DEFAULT_SETTINGS: SystemSettingsState = {
   model_api_enabled: false,
   model_api_key: '',
@@ -51,6 +57,7 @@ export const SystemSettings: React.FC = () => {
   const [isTesting, setIsTesting] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [testResult, setTestResult] = useState<SystemSettingsTestResult | null>(null);
+  const [warningModal, setWarningModal] = useState<WarningModalState>(null);
 
   useEffect(() => {
     let isCancelled = false;
@@ -114,7 +121,7 @@ export const SystemSettings: React.FC = () => {
     };
   }, [location.pathname]);
 
-  const handleSave = async () => {
+  const saveSettings = async () => {
     if (!validateSettings()) return;
     setIsSaving(true);
     try {
@@ -137,6 +144,73 @@ export const SystemSettings: React.FC = () => {
       alert('保存失败，请检查后端服务是否启动');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const navigateBack = () => {
+    navigate('/dashboard/clues');
+  };
+
+  const getPreflightWarning = () => {
+    const llmReady = Boolean(
+      settings.model_api_enabled &&
+      settings.model_api_key.trim() &&
+      settings.model_base_url.trim() &&
+      settings.model_name.trim()
+    );
+    const searchReady = Boolean(
+      (settings.serper_api_enabled && settings.serper_api_key.trim()) ||
+      (settings.tavily_api_enabled && settings.tavily_api_key.trim())
+    );
+
+    if (!llmReady && !searchReady) {
+      return {
+        title: '提示',
+        message: '当前缺少AI过滤与搜索支持。',
+      };
+    }
+
+    if (!llmReady) {
+      return {
+        title: '提示',
+        message: 'AI过滤功能未开启，可能会产生大量无效线索。',
+      };
+    }
+
+    if (!searchReady) {
+      return {
+        title: '提示',
+        message: '当前缺少搜索API支持，只能使用应用自带搜索功能。',
+      };
+    }
+
+    return null;
+  };
+
+  const handleGuardedAction = (action: 'save' | 'back') => {
+    const warning = getPreflightWarning();
+    if (warning) {
+      setWarningModal({ ...warning, confirmAction: action });
+      return;
+    }
+
+    if (action === 'save') {
+      void saveSettings();
+      return;
+    }
+
+    navigateBack();
+  };
+
+  const handleConfirmWarning = () => {
+    const action = warningModal?.confirmAction;
+    setWarningModal(null);
+    if (action === 'save') {
+      void saveSettings();
+      return;
+    }
+    if (action === 'back') {
+      navigateBack();
     }
   };
 
@@ -197,7 +271,7 @@ export const SystemSettings: React.FC = () => {
         <header className="setup-header">
           <div className="settings-header-row">
             <h1 className="content-title">系统设置</h1>
-            <button className="back-trigger" onClick={() => navigate('/dashboard/clues')}>
+            <button className="back-trigger" onClick={() => handleGuardedAction('back')}>
               返回
             </button>
           </div>
@@ -367,7 +441,7 @@ export const SystemSettings: React.FC = () => {
               )}
 
               <div className="actions settings-actions">
-                <button className="primary-btn" onClick={handleSave} disabled={isSaving}>
+                <button className="primary-btn" onClick={() => handleGuardedAction('save')} disabled={isSaving}>
                   {isSaving ? '正在保存...' : isSaved ? '已保存' : '保存设置'}
                 </button>
               </div>
@@ -375,6 +449,25 @@ export const SystemSettings: React.FC = () => {
           )}
         </main>
       </div>
+
+      {warningModal && (
+        <div className="settings-warning-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-warning-title">
+          <div className="settings-warning-modal">
+            <h2 id="settings-warning-title" className="settings-warning-title">
+              {warningModal.title}
+            </h2>
+            <p className="settings-warning-message">{warningModal.message}</p>
+            <div className="settings-warning-actions">
+              <button className="primary-btn" onClick={handleConfirmWarning}>
+                确认
+              </button>
+              <button className="secondary-btn" onClick={() => setWarningModal(null)}>
+                返回
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

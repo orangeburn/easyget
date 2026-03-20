@@ -325,11 +325,20 @@ export const ClueTable: React.FC = () => {
   const selectedCount = selectedIds.size;
   const pageStart = filteredClues.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const pageEnd = Math.min(currentPage * PAGE_SIZE, filteredClues.length);
-  const paginationWindow = useMemo(() => {
-    const start = Math.max(1, currentPage - 2);
-    const end = Math.min(totalPages, start + 4);
-    const adjustedStart = Math.max(1, end - 4);
-    return Array.from({ length: end - adjustedStart + 1 }, (_, idx) => adjustedStart + idx);
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, idx) => idx + 1);
+    }
+
+    if (currentPage <= 4) {
+      return [1, 2, 3, 4, 5, 'ellipsis-right', totalPages] as const;
+    }
+
+    if (currentPage >= totalPages - 3) {
+      return [1, 'ellipsis-left', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages] as const;
+    }
+
+    return [1, 'ellipsis-left', currentPage - 1, currentPage, currentPage + 1, 'ellipsis-right', totalPages] as const;
   }, [currentPage, totalPages]);
 
   useEffect(() => {
@@ -793,15 +802,21 @@ export const ClueTable: React.FC = () => {
             >
               <ChevronLeft size={14} />
             </button>
-            {paginationWindow.map(page => (
-              <button
-                key={page}
-                className={`pagination-btn page-number ${currentPage === page ? 'active' : ''}`}
-                onClick={() => setCurrentPage(page)}
-              >
-                {page}
-              </button>
-            ))}
+            {paginationItems.map(item =>
+              typeof item === 'number' ? (
+                <button
+                  key={item}
+                  className={`pagination-btn page-number ${currentPage === item ? 'active' : ''}`}
+                  onClick={() => setCurrentPage(item)}
+                >
+                  {item}
+                </button>
+              ) : (
+                <span key={item} className="pagination-ellipsis" aria-hidden="true">
+                  ...
+                </span>
+              )
+            )}
             <button
               className="pagination-btn"
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}

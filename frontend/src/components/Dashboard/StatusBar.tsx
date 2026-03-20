@@ -134,7 +134,7 @@ export const StatusBar: React.FC = () => {
           />
           <span className="status-brand-name">Easyget</span>
         </div>
-        <div className="status-item">
+        <div className="status-item strategy-status">
           <Search size={16} />
           <span className="label">当前策略:</span>
           <span className="value">
