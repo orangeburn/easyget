@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, ExternalLink, AlertTriangle } from 'lucide-react';
 import { normalizeClueUrl } from '../../utils/url';
 import './ClueDetailDrawer.css';
@@ -11,17 +11,34 @@ interface ClueDetailProps {
 }
 
 export const ClueDetailDrawer: React.FC<ClueDetailProps> = ({ clue, isOpen, onClose, onFeedback }) => {
-  if (!clue) return null;
-
-  const metadata = clue.extracted_metadata || {};
+  const drawerRef = useRef<HTMLDivElement | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const isWechatLikeSource = clue.source === 'wechat' || clue.source === '定向公号';
+  const metadata = clue?.extracted_metadata || {};
+  const isWechatLikeSource = clue?.source === 'wechat' || clue?.source === '定向公号';
 
   useEffect(() => {
     if (!isOpen) {
       setIsSubmitting(false);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (drawerRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-clue-trigger="true"]')) return;
+      onClose();
+    };
+
+    document.addEventListener('mousedown', handlePointerDown, true);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown, true);
+    };
+  }, [isOpen, onClose]);
+
+  if (!clue) return null;
 
   const handleCopyTitle = () => {
     if (!clue.title) return;
@@ -45,8 +62,12 @@ export const ClueDetailDrawer: React.FC<ClueDetailProps> = ({ clue, isOpen, onCl
 
   return (
     <>
-      <div className={`drawer-overlay ${isOpen ? 'open' : ''}`} onClick={onClose} />
-      <div className={`drawer-content ${isOpen ? 'open' : ''}`} onClick={e => e.stopPropagation()}>
+      <div className={`drawer-overlay ${isOpen ? 'open' : ''}`} aria-hidden="true" />
+      <div
+        ref={drawerRef}
+        className={`drawer-content ${isOpen ? 'open' : ''}`}
+        onClick={e => e.stopPropagation()}
+      >
         <header className="drawer-header">
           <button className="close-btn" onClick={onClose}><X size={20} /></button>
           <div className="header-main">

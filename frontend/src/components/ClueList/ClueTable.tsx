@@ -718,7 +718,11 @@ export const ClueTable: React.FC = () => {
                       />
                     </td>
                   )}
-                  <td className="td-title" onClick={() => setSelectedClue(clue)}>
+                  <td
+                    className="td-title"
+                    data-clue-trigger="true"
+                    onClick={() => setSelectedClue(clue)}
+                  >
                     <div className="title-cell" title={clue.title}>
                       <span className="main-title">{clue.title}</span>
                       <span className="sub-company">{clue.extracted_metadata?.company_name || '未知机构'}</span>
@@ -760,6 +764,7 @@ export const ClueTable: React.FC = () => {
                       <button 
                         type="button"
                         className="action-btn detail"
+                        data-clue-trigger="true"
                         onClick={(event) => {
                           event.stopPropagation();
                           setSelectedClue(clue);
