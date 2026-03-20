@@ -175,7 +175,7 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 920,
-    minWidth: 1180,
+    minWidth: 900,
     minHeight: 760,
     show: false,
     title: 'Easyget',

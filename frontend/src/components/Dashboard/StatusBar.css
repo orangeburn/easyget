@@ -1,9 +1,7 @@
 .status-bar {
   display: flex;
   justify-content: center;
-  width: 100vw;
-  min-width: max-content;
-  margin-left: calc(50% - 50vw);
+  width: 100%;
   background-color: rgba(255, 255, 255, 0.72);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
@@ -80,10 +78,10 @@
 }
 
 .status-item.strategy-status {
-  width: clamp(260px, 24vw, 360px);
-  min-width: 260px;
-  max-width: 360px;
-  flex: 0 0 clamp(260px, 24vw, 360px);
+  width: clamp(220px, 20vw, 300px);
+  min-width: 220px;
+  max-width: 300px;
+  flex: 0 0 clamp(220px, 20vw, 300px);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -128,10 +126,10 @@
   }
 
   .status-item.strategy-status {
-    width: clamp(220px, 28vw, 300px);
-    min-width: 220px;
-    max-width: 300px;
-    flex-basis: clamp(220px, 28vw, 300px);
+    width: clamp(200px, 26vw, 260px);
+    min-width: 200px;
+    max-width: 260px;
+    flex-basis: clamp(200px, 26vw, 260px);
   }
 
   .status-item.task-status {
