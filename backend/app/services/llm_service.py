@@ -9,11 +9,10 @@ class LLMService:
         self._client_key = None
         self._client_base_url = None
 
-    def _get_common_params(self, temperature: float = 0.7) -> Dict[str, Any]:
+    def _get_common_params(self) -> Dict[str, Any]:
         """获取通用请求参数，自动适配 MiniMax 特性"""
         params = {
             "model": settings.MODEL_NAME,
-            "temperature": temperature,
         }
         # 仅当 Base URL 包含 minimax 时才启用特有参数，确保对 OpenAI/DeepSeek 的兼容性
         if settings.OPENAI_BASE_URL and "minimax" in settings.OPENAI_BASE_URL.lower():
@@ -42,7 +41,7 @@ class LLMService:
         formatted_messages = [{"role": "system", "content": system_prompt}] + messages
         response = client.chat.completions.create(
             messages=formatted_messages,
-            **self._get_common_params(temperature=0.7)
+            **self._get_common_params()
         )
         return response.choices[0].message.content
 
@@ -57,7 +56,7 @@ class LLMService:
         response = client.chat.completions.create(
             messages=messages,
             response_format={"type": "json_object"},
-            **self._get_common_params(temperature=0.1)
+            **self._get_common_params()
         )
         content = response.choices[0].message.content
         

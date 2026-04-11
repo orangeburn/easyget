@@ -92,7 +92,6 @@ def _mask_error_message(err: Exception) -> str:
 def _model_test_params(base_url: str, model_name: str) -> Dict[str, Any]:
     params: Dict[str, Any] = {
         "model": model_name,
-        "temperature": 0.0,
         "max_tokens": 1
     }
     if base_url and "minimax" in base_url.lower():
