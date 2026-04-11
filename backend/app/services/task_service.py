@@ -89,11 +89,11 @@ class TaskService:
         
         # API 主动触发时，state.is_running 可能已经被 API 线程置为 True 以提供即时反馈
         state.is_running = True
+        state.is_paused = False
         state.current_progress = 10
         state.current_step = "定时任务启动中..." if is_scheduled else "正在启动混合采集器..."
         debug_log(f"TaskService: run_one_off_scan start (is_scheduled={is_scheduled})")
         self._current_task = asyncio.current_task()
-        self._stop_requested = False
         
         try:
             # 1. 采集
@@ -168,8 +168,14 @@ class TaskService:
         except asyncio.CancelledError:
             debug_log("TaskService: Task cancelled by user")
             state.current_progress = 0
-            state.current_step = "已暂停"
-            state.is_paused = True
+            # 仅在用户明确点击“暂停/停止”时进入 paused 状态；
+            # 配置热更新/任务重启触发的取消不应阻断自动循环。
+            if self._stop_requested:
+                state.current_step = "已暂停"
+                state.is_paused = True
+            else:
+                state.current_step = "任务重启中..."
+                state.is_paused = False
             return
         except Exception as e:
             import traceback
