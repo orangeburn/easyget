@@ -276,7 +276,7 @@ export const SystemSettings: React.FC = () => {
             </button>
           </div>
           <p className="content-desc">
-            在这里配置模型与搜索服务的 API。所有配置保存在系统中，无需再修改本地环境变量。
+            在这里配置模型与搜索服务的 API。
           </p>
         </header>
 

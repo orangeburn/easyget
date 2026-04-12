@@ -318,7 +318,7 @@ export const SetupWizard: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="strategy-form">
+            <div className="strategy-form" ref={menuWrapRef}>
               <div className="form-item">
                 <label className="form-label">核心搜索词</label>
                 <input
@@ -343,7 +343,7 @@ export const SetupWizard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="filter-grid" ref={menuWrapRef}>
+              <div className="filter-grid">
                 <div className="form-item">
                   <label className="form-label">目标省份</label>
                   <button className={`option-trigger ${openMenu === 'province' ? 'open' : ''}`} type="button" onClick={() => setOpenMenu(openMenu === 'province' ? null : 'province')}>

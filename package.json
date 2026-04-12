@@ -1,6 +1,6 @@
 {
   "name": "easyget-monorepo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Easyget Automation Bidding Hub",
   "main": "electron/main.cjs",
   "scripts": {
