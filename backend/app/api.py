@@ -46,7 +46,9 @@ async def run_collection_and_analysis(payload: Dict[str, Any]):
     
     # 1. 解析并持久化手动画像
     constraint_data = payload.get("constraint")
+    scan_frequency = 1440
     if constraint_data:
+        scan_frequency = int(constraint_data.get("scan_frequency", 1440))
         try:
             new_constraint = BusinessConstraint(**constraint_data)
             state.update_constraint(new_constraint)
@@ -57,18 +59,28 @@ async def run_collection_and_analysis(payload: Dict[str, Any]):
     # 2. 解析采集策略
     strategy = payload.get("strategy", {})
 
-    # 如果已有任务在跑，先终止旧任务，确保新配置生效（不影响自动循环）
+    # 自动循环模式：update_constraint 已通过 schedule_scan(0) 启动了 auto_loop，
+    # auto_loop 会立刻执行第一次扫描，此处无需再创建重复的扫描任务。
+    # 重复创建会导致两个并发的 Playwright 实例争夺浏览器资源，引发崩溃。
+    if scan_frequency == 0:
+        debug_log("Auto loop mode: relying on auto_loop_runner for scanning")
+        state.is_paused = False
+        state.current_step = "auto loop started"
+        return {"status": "Auto loop started", "is_running": True}
+
+    # 执行一次模式：手动创建单次扫描任务
+    # 如果已有任务在跑，先终止旧任务，确保新配置生效
     try:
         task_service.cancel_current_task()
     except Exception as e:
         debug_log(f"Task cancel failed before restart: {e}")
     await asyncio.sleep(0)
     
-    # 立即标记状态，防止前端轮询到“空闲”
+    # 立即标记状态，防止前端轮询到"空闲"
     state.is_running = True
     state.is_paused = False
     state.current_progress = 5
-    state.current_step = "正在启动抓取任务..."
+    state.current_step = "starting task..."
 
     debug_log(f"Dispatching task context keywords: {strategy.get('search_keywords', 'N/A')}")
     asyncio.create_task(task_service.run_one_off_scan(strategy))

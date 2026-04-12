@@ -75,8 +75,9 @@ class SystemState:
             db.close()
 
     def update_constraint(self, constraint: BusinessConstraint):
-        # ... (rest of the method remains the same)
+        from app.utils.logger import debug_log
         db = SessionLocal()
+        committed_frequency = None
         try:
             model = db.query(ConstraintModel).first()
             if not model:
@@ -95,16 +96,21 @@ class SystemState:
             model.updated_at = datetime.now()
             
             db.commit()
-
-            # 同步更新调度器
-            from app.core.scheduler import scheduler_manager
-            scheduler_manager.schedule_scan(model.scan_frequency)
-
+            committed_frequency = model.scan_frequency
         except Exception as e:
             db.rollback()
-            print(f"Error updating constraint: {e}")
+            debug_log(f"Error updating constraint: {e}")
         finally:
             db.close()
+
+        # 调度器更新独立于 DB 事务，避免异常被静默吞掉
+        if committed_frequency is not None:
+            try:
+                from app.core.scheduler import scheduler_manager
+                debug_log(f"update_constraint: scheduling scan with frequency={committed_frequency}")
+                scheduler_manager.schedule_scan(committed_frequency)
+            except Exception as e:
+                debug_log(f"Error scheduling scan after constraint update: {e}")
 
     def get_last_scan_at(self) -> Optional[datetime]:
         db = SessionLocal()
