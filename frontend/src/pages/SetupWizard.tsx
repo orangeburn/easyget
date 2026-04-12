@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
 import './SetupWizard.css';
-import { Check } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 
 const REGION_DATA: Record<string, string[]> = {
   '全国': [],
@@ -51,6 +51,16 @@ const DEFAULT_STRATEGY = {
 };
 
 const CONFIG_CACHE_KEY = 'easyget_setup_strategy_cache';
+const TIME_RANGE_OPTIONS = [
+  { value: 'all', label: '不限' },
+  { value: '3d', label: '三天内' },
+  { value: '1w', label: '一周内' },
+  { value: '1m', label: '一个月内' }
+];
+const SCAN_FREQUENCY_OPTIONS = [
+  { value: 0, label: '自动循环' },
+  { value: 1440, label: '执行一次' }
+];
 
 export const SetupWizard: React.FC = () => {
   const navigate = useNavigate();
@@ -63,6 +73,8 @@ export const SetupWizard: React.FC = () => {
 
   const [strategy, setStrategy] = useState(DEFAULT_STRATEGY);
   const [expandedKeywords, setExpandedKeywords] = useState<string[]>([]);
+  const [openMenu, setOpenMenu] = useState<null | 'province' | 'city' | 'time' | 'frequency'>(null);
+  const menuWrapRef = useRef<HTMLDivElement | null>(null);
 
   const sanitizeTargetUrls = (value: string) => {
     const lines = value.split('\n').map((s) => s.trim()).filter(Boolean);
@@ -188,6 +200,23 @@ export const SetupWizard: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!menuWrapRef.current) return;
+      if (menuWrapRef.current.contains(event.target as Node)) return;
+      setOpenMenu(null);
+    };
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpenMenu(null);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, []);
+
 
   const handleSubmit = async () => {
     if (!strategy.search_keywords.trim() && !strategy.target_urls.trim() && !strategy.wechat_accounts.trim()) {
@@ -248,15 +277,6 @@ export const SetupWizard: React.FC = () => {
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleProvinceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const province = e.target.value;
-    setStrategy({
-      ...strategy,
-      province,
-      city: '全省'
-    });
   };
 
   if (isLoadingState) {
@@ -323,32 +343,65 @@ export const SetupWizard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="filter-grid">
+              <div className="filter-grid" ref={menuWrapRef}>
                 <div className="form-item">
                   <label className="form-label">目标省份</label>
-                  <select
-                    className="form-input"
-                    value={strategy.province}
-                    onChange={handleProvinceChange}
-                  >
-                    {provinces.map(p => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
+                  <button className={`option-trigger ${openMenu === 'province' ? 'open' : ''}`} type="button" onClick={() => setOpenMenu(openMenu === 'province' ? null : 'province')}>
+                    <span>{strategy.province || '请选择省份'}</span>
+                    <ChevronDown size={16} />
+                  </button>
+                  {openMenu === 'province' && (
+                    <div className="option-popover option-grid" role="group" aria-label="目标省份">
+                      {provinces.map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          className={`filter-option ${strategy.province === p ? 'active' : ''}`}
+                          onClick={() => {
+                            setStrategy({ ...strategy, province: p, city: '全省' });
+                            setOpenMenu(null);
+                          }}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-item" style={{ opacity: strategy.province === '全国' ? 0.3 : 1, pointerEvents: strategy.province === '全国' ? 'none' : 'auto' }}>
                   <label className="form-label">目标城市</label>
-                  <select
-                    className="form-input"
-                    value={strategy.city}
-                    onChange={e => setStrategy({ ...strategy, city: e.target.value })}
-                  >
-                    <option value="全省">全省</option>
-                    {cities.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                  <button className={`option-trigger ${openMenu === 'city' ? 'open' : ''}`} type="button" onClick={() => setOpenMenu(openMenu === 'city' ? null : 'city')}>
+                    <span>{strategy.city || '全省'}</span>
+                    <ChevronDown size={16} />
+                  </button>
+                  {openMenu === 'city' && (
+                    <div className="option-popover option-grid" role="group" aria-label="目标城市">
+                      <button
+                        type="button"
+                        className={`filter-option ${strategy.city === '全省' || !strategy.city ? 'active' : ''}`}
+                        onClick={() => {
+                          setStrategy({ ...strategy, city: '全省' });
+                          setOpenMenu(null);
+                        }}
+                      >
+                        全省
+                      </button>
+                      {cities.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          className={`filter-option ${strategy.city === c ? 'active' : ''}`}
+                          onClick={() => {
+                            setStrategy({ ...strategy, city: c });
+                            setOpenMenu(null);
+                          }}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -366,28 +419,52 @@ export const SetupWizard: React.FC = () => {
 
                 <div className="form-item">
                   <label className="form-label">发布时间</label>
-                  <select
-                    className="form-input"
-                    value={strategy.time_range}
-                    onChange={e => setStrategy({ ...strategy, time_range: e.target.value })}
-                  >
-                    <option value="all">不限</option>
-                    <option value="3d">三天内</option>
-                    <option value="1w">一周内</option>
-                    <option value="1m">一个月内</option>
-                  </select>
+                  <button className={`option-trigger ${openMenu === 'time' ? 'open' : ''}`} type="button" onClick={() => setOpenMenu(openMenu === 'time' ? null : 'time')}>
+                    <span>{TIME_RANGE_OPTIONS.find((v) => v.value === strategy.time_range)?.label || '不限'}</span>
+                    <ChevronDown size={16} />
+                  </button>
+                  {openMenu === 'time' && (
+                    <div className="option-popover" role="group" aria-label="发布时间">
+                      {TIME_RANGE_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`filter-option ${strategy.time_range === option.value ? 'active' : ''}`}
+                          onClick={() => {
+                            setStrategy({ ...strategy, time_range: option.value });
+                            setOpenMenu(null);
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-item">
                   <label className="form-label">搜集频率</label>
-                  <select
-                    className="form-input"
-                    value={strategy.scan_frequency}
-                    onChange={e => setStrategy({ ...strategy, scan_frequency: Number(e.target.value) })}
-                  >
-                    <option value={0}>自动循环</option>
-                    <option value={1440}>每一天</option>
-                  </select>
+                  <button className={`option-trigger ${openMenu === 'frequency' ? 'open' : ''}`} type="button" onClick={() => setOpenMenu(openMenu === 'frequency' ? null : 'frequency')}>
+                    <span>{SCAN_FREQUENCY_OPTIONS.find((v) => v.value === strategy.scan_frequency)?.label || '执行一次'}</span>
+                    <ChevronDown size={16} />
+                  </button>
+                  {openMenu === 'frequency' && (
+                    <div className="option-popover" role="group" aria-label="搜集频率">
+                      {SCAN_FREQUENCY_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`filter-option ${strategy.scan_frequency === option.value ? 'active' : ''}`}
+                          onClick={() => {
+                            setStrategy({ ...strategy, scan_frequency: option.value });
+                            setOpenMenu(null);
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
