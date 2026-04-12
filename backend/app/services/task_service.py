@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Dict, Any, List
 from app.engines.collector.dispatcher import CollectionDispatcher
 from app.engines.analyzer.pipeline import CluePipeline
@@ -64,7 +65,9 @@ class TaskService:
 
     def cancel_current_task(self):
         """仅取消当前扫描任务，不影响自动循环调度。"""
-        if self._current_task and not self._current_task.done():
+        # 在自动循环模式下，_current_task 可能就是 _auto_loop_task 本身。
+        # 这里要避免误取消循环主任务，否则会出现“只跑一轮就停”的现象。
+        if self._current_task and not self._current_task.done() and self._current_task is not self._auto_loop_task:
             self._current_task.cancel()
 
     async def _auto_loop_runner(self):
@@ -120,9 +123,10 @@ class TaskService:
                     config["search_keywords"] = ",".join(fallback_keywords)
             elif is_scheduled:
                 constraint = state.constraint
-                if constraint:
-                    config["search_keywords"] = f"{constraint.company_name} 招标"
+                if constraint and constraint.core_business:
+                    config["search_keywords"] = ",".join(dedupe_keywords(constraint.core_business))
                 else:
+                    # 避免将占位公司名（如“手动任务”）拼入搜索词造成污染
                     config["search_keywords"] = ""
 
             if not state.constraint:
@@ -165,6 +169,7 @@ class TaskService:
             state.current_step = f"分析完成，共处理 {len(raw_clues)} 条，正在同步结果..."
             state.current_progress = 100
             state.current_step = "完成"
+            state.mark_scan_completed(datetime.now())
         except asyncio.CancelledError:
             debug_log("TaskService: Task cancelled by user")
             state.current_progress = 0

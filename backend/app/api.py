@@ -30,7 +30,7 @@ async def get_system_state():
             "geography_limits": constraint.geography_limits if constraint else [],
             "financial_thresholds": constraint.financial_thresholds if constraint else [],
             "other_constraints": constraint.other_constraints if constraint else [],
-            "scan_frequency": constraint.scan_frequency if constraint else 30,
+            "scan_frequency": constraint.scan_frequency if constraint else 1440,
             "expanded_keywords": state.last_expanded_keywords
         }
 

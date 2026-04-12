@@ -33,8 +33,16 @@ async def lifespan(app: FastAPI):
     
     # 获取已有画像并初始化定时任务
     constraint = state.constraint
-    if constraint and constraint.scan_frequency:
-        scheduler_manager.schedule_scan(constraint.scan_frequency)
+    if constraint and constraint.scan_frequency is not None:
+        debug_log(
+            f"Startup schedule init: scan_frequency={constraint.scan_frequency}, "
+            "startup_catchup_enabled=False"
+        )
+        scheduler_manager.schedule_scan(
+            constraint.scan_frequency,
+            trigger_missed_today=False,
+            activate=False
+        )
     
     # 启动过清理任务
     scheduler_manager.schedule_cleanup()

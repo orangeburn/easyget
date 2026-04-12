@@ -34,9 +34,10 @@ class ConstraintModel(Base):
     geography_limits = Column(JSON)
     financial_thresholds = Column(JSON)
     other_constraints = Column(JSON)
-    scan_frequency = Column(Integer, default=30) # Default 30 minutes
+    scan_frequency = Column(Integer, default=1440) # Default daily
     custom_urls = Column(JSON, default=[])
     wechat_accounts = Column(JSON, default=[])
+    last_scan_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 class ClueModel(Base):
@@ -89,6 +90,7 @@ def _ensure_column(table_name: str, column_name: str, column_def: str) -> None:
 _ensure_column("clues", "semantic_score", "semantic_score INTEGER")
 _ensure_column("clues", "markdown_text", "markdown_text TEXT")
 _ensure_column("constraints", "wechat_accounts", "wechat_accounts JSON")
+_ensure_column("constraints", "last_scan_at", "last_scan_at DATETIME")
 _ensure_column("system_settings", "model_api_enabled", "model_api_enabled BOOLEAN DEFAULT 0")
 _ensure_column("system_settings", "model_api_key", "model_api_key TEXT")
 _ensure_column("system_settings", "model_base_url", "model_base_url TEXT")

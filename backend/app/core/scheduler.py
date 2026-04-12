@@ -1,7 +1,10 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from app.core.state import state
+from app.utils.logger import debug_log
 import logging
+from datetime import datetime
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -25,33 +28,53 @@ class TaskScheduler:
             self.scheduler.shutdown(wait=False)
             logger.info("Scheduler shut down.")
 
-    def schedule_scan(self, minutes: int):
-        """配置或重新配置定时扫描周期"""
+    def schedule_scan(self, minutes: int, trigger_missed_today: bool = False, activate: bool = True):
+        """配置或重新配置定时扫描周期。
+        activate=False 时仅更新配置，不触发任何执行（用于服务启动阶段恢复状态）。
+        """
         from app.services.task_service import task_service
+        minutes = 0 if minutes == 0 else 1440
+        debug_log(
+            f"Scheduler: schedule_scan(minutes={minutes}, "
+            f"trigger_missed_today={trigger_missed_today}, activate={activate})"
+        )
         
         # 如果任务已存在，先移除
         if self.scheduler.get_job(self.job_id):
             self.scheduler.remove_job(self.job_id)
             logger.info(f"Removed existing job: {self.job_id}")
+            debug_log(f"Scheduler: removed existing job {self.job_id}")
 
         # 自动循环模式（minutes <= 0）
         if minutes <= 0:
+            if not activate:
+                task_service.stop_auto_loop()
+                debug_log("Scheduler: auto loop not activated (activate=False)")
+                return
             task_service.start_auto_loop()
             logger.info("Auto loop enabled (no fixed interval).")
+            debug_log("Scheduler: auto loop enabled")
             return
 
-        # 定时模式：确保自动循环停止
+        # 每天模式：不做固定时刻调度，仅保留“启动时补跑一次（若今天未跑）”
+        # 先确保自动循环停止
         task_service.stop_auto_loop()
+        debug_log("Scheduler: auto loop stopped (daily mode, no fixed-time schedule)")
 
-        # 添加新任务
-        self.scheduler.add_job(
-            task_service.run_one_off_scan,
-            trigger=IntervalTrigger(minutes=minutes),
-            id=self.job_id,
-            kwargs={"is_scheduled": True}, # 标记为自动调度运行
-            replace_existing=True
-        )
-        logger.info(f"Scheduled scan job every {minutes} minutes.")
+        if trigger_missed_today and activate:
+            last_scan_at = state.get_last_scan_at()
+            today = datetime.now().date()
+            if (last_scan_at is None) or (last_scan_at.date() != today):
+                debug_log("Scheduler: daily mode startup catch-up triggered")
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(task_service.run_one_off_scan(is_scheduled=True))
+                except Exception as e:
+                    debug_log(f"Scheduler: failed to trigger startup catch-up - {e}")
+            else:
+                debug_log("Scheduler: daily mode startup catch-up skipped (already ran today)")
+        elif trigger_missed_today and not activate:
+            debug_log("Scheduler: catch-up skipped because activate=False")
 
     def schedule_cleanup(self):
         """每12小时清理一次过期线索"""

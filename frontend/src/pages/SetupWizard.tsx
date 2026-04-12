@@ -47,7 +47,7 @@ const DEFAULT_STRATEGY = {
   city: '',
   min_amount: '',
   time_range: 'all',
-  scan_frequency: 30
+  scan_frequency: 1440
 };
 
 const CONFIG_CACHE_KEY = 'easyget_setup_strategy_cache';
@@ -109,6 +109,8 @@ export const SetupWizard: React.FC = () => {
     }
   };
 
+  const normalizeScanFrequency = (value: any) => (Number(value) === 0 ? 0 : 1440);
+
   const buildStrategyFromState = (data: any) => {
     if (!data?.has_constraint) {
       return DEFAULT_STRATEGY;
@@ -124,7 +126,7 @@ export const SetupWizard: React.FC = () => {
       city: prevCity || '',
       min_amount: data.financial_thresholds?.[0]?.value || '',
       time_range: data.other_constraints?.find((c: any) => c.name === '发布时间')?.value || 'all',
-      scan_frequency: data.scan_frequency || 30
+      scan_frequency: normalizeScanFrequency(data.scan_frequency)
     };
   };
 

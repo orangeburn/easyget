@@ -89,7 +89,7 @@ export const StatusBar: React.FC = () => {
       geography_limits: state?.geography_limits || [],
       financial_thresholds: state?.financial_thresholds || [],
       other_constraints: state?.other_constraints || [],
-      scan_frequency: Number(state?.scan_frequency) || 30
+      scan_frequency: Number(state?.scan_frequency) === 0 ? 0 : 1440
     };
 
     const strategy = {

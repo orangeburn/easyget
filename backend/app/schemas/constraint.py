@@ -34,7 +34,7 @@ class BusinessConstraint(BaseModel):
         default_factory=list, 
         description="其他潜在约束（如：人员规模要求、过往相似案例要求等。由提取服务补足）"
     )
-    scan_frequency: int = Field(default=30, description="采集频率（分钟）")
+    scan_frequency: int = Field(default=1440, description="采集频率（分钟），仅支持 0(自动循环) 或 1440(每天)")
     custom_urls: List[str] = Field(default=[], description="用户自定义的监控站点列表")
     wechat_accounts: List[str] = Field(default=[], description="微信公众号监控清单")
     updated_at: datetime = Field(default_factory=datetime.now)

@@ -8,6 +8,13 @@ import asyncio
 from typing import Set
 from app.utils.urls import sanitize_target_urls
 
+def normalize_scan_frequency(value: Optional[int]) -> int:
+    if value == 0:
+        return 0
+    if value == 1440:
+        return 1440
+    return 1440
+
 class SystemState:
     def __init__(self):
         # 内存中仅保留轻量级状态
@@ -31,9 +38,10 @@ class SystemState:
                     geography_limits=model.geography_limits,
                     financial_thresholds=model.financial_thresholds,
                     other_constraints=model.other_constraints,
-                    scan_frequency=model.scan_frequency,
+                    scan_frequency=normalize_scan_frequency(model.scan_frequency),
                     custom_urls=model.custom_urls or [],
-                    wechat_accounts=model.wechat_accounts or []
+                    wechat_accounts=model.wechat_accounts or [],
+                    updated_at=model.updated_at or datetime.now()
                 )
             return None
         finally:
@@ -81,7 +89,7 @@ class SystemState:
             model.geography_limits = [q.model_dump() if hasattr(q, 'model_dump') else q for q in constraint.geography_limits]
             model.financial_thresholds = [q.model_dump() if hasattr(q, 'model_dump') else q for q in constraint.financial_thresholds]
             model.other_constraints = [q.model_dump() if hasattr(q, 'model_dump') else q for q in constraint.other_constraints]
-            model.scan_frequency = constraint.scan_frequency if constraint.scan_frequency is not None else 30
+            model.scan_frequency = normalize_scan_frequency(constraint.scan_frequency)
             model.custom_urls = sanitize_target_urls(constraint.custom_urls or [])
             model.wechat_accounts = constraint.wechat_accounts or []
             model.updated_at = datetime.now()
@@ -95,6 +103,29 @@ class SystemState:
         except Exception as e:
             db.rollback()
             print(f"Error updating constraint: {e}")
+        finally:
+            db.close()
+
+    def get_last_scan_at(self) -> Optional[datetime]:
+        db = SessionLocal()
+        try:
+            model = db.query(ConstraintModel).order_by(ConstraintModel.updated_at.desc()).first()
+            if not model:
+                return None
+            return model.last_scan_at
+        finally:
+            db.close()
+
+    def mark_scan_completed(self, when: Optional[datetime] = None):
+        db = SessionLocal()
+        try:
+            model = db.query(ConstraintModel).order_by(ConstraintModel.updated_at.desc()).first()
+            if not model:
+                return
+            model.last_scan_at = when or datetime.now()
+            db.commit()
+        except Exception:
+            db.rollback()
         finally:
             db.close()
 
